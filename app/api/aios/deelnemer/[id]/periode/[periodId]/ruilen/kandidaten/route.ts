@@ -10,7 +10,7 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
-import { aiosRuilKandidaten } from '@/lib/aiosRuilen';
+import { aiosRuilKandidaten, NOG_VOORLOPIG, ruilenKan } from '@/lib/aiosRuilen';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string; periodId: string }> }): Promise<NextResponse> {
   const { id, periodId } = await props.params;
@@ -24,6 +24,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     }
     if (period.status !== 'GEPUBLICEERD') {
       return NextResponse.json({ success: false, error: { code: 'NOT_PUBLISHED', message: 'Ruilen kan als het rooster gepubliceerd is.' } }, { status: 404 });
+    }
+    if (!ruilenKan(period)) {
+      return NextResponse.json({ success: false, error: { code: 'NOT_DEFINITIEF', message: NOG_VOORLOPIG } }, { status: 409 });
     }
     const kandidaten = aiosRuilKandidaten(period, id, req.nextUrl.searchParams.get('eenheid') ?? '');
     if (!kandidaten) {

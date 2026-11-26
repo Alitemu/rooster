@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner } from './setup';
+import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner, openSecties, openOnderdeel } from './setup';
 import { db } from '@/db/client';
 
 /**
@@ -39,6 +39,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
   const gotoPlanner = async (page: import('@playwright/test').Page) => {
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    // The period's header and its buttons are in the section "Periode" (1.12.0).
+    await openOnderdeel(page, 'Periode');
     await page.waitForLoadState('networkidle');
   };
 
@@ -141,7 +143,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
     await expect(page.getByText('Het rooster is voorlopig gepubliceerd.')).toBeVisible({ timeout: 10000 });
     await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
     await expect(page.getByText(/📝 Status: Voorlopig gepubliceerd/)).toBeVisible();
-    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
+    // The dashboard's own copy is the status in the blue bar since 1.12.0.
+    await expect(page.getByTestId('kop-periode')).toContainText('Voorlopig gepubliceerd');
 
     const period = db
       .prepare(
@@ -168,7 +171,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
   test('the publish button is gone once the period is published', async ({ page }) => {
     await gotoPlanner(page);
 
-    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('kop-periode')).toContainText('Voorlopig gepubliceerd');
     await expect(page.getByRole('button', { name: '✅ Voorlopig publiceren' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toBeVisible();
   });
@@ -183,7 +186,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     await expect(page.getByText('Het rooster is definitief.')).toBeVisible({ timeout: 10000 });
     await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
 
-    await expect(page.getByText('Status: Definitief', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('kop-periode')).toContainText('Definitief');
     await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toHaveCount(0);
     const row = db
       .prepare('SELECT definitief_op FROM dienstrooster_schedule_period WHERE id = ?')
@@ -211,6 +214,12 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
       await page.waitForLoadState('networkidle');
 
+      // Foldable sections: the roster open from the start (2.1.0, R2-02), the swapping closed.
+      for (const [id, titel, open] of [['rooster', 'Jouw rooster', 'true'], ['ruilen', 'Ruilen', 'false']]) {
+        await expect(page.getByTestId(`deelnemer-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', open);
+      }
+      await openSecties(page);
+
       await expect(page.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
 
       const expected = (
@@ -223,11 +232,13 @@ test.describe('Roster Publication Workflow - E2E', () => {
       expect(expected).toBeGreaterThan(0);
 
       // Balance summary is rendered in words, never as a raw signed number
-      // or a [min,max] pair (CLAUDE.md) - "ongeveer 9 avonddiensten".
+      // or a [min,max] pair (CLAUDE.md) - "2 of 3 avonddiensten", "hoogstens 1 feestdagdienst" (2.1.0: the range,
+      // as the planner sees it; "ongeveer 3" read as a shortfall next to the 2 someone got).
       await expect(page.getByText('Overzicht saldo')).toBeVisible();
       await expect(
-        page.getByText(/Je streefaantal is ongeveer \d+ \w+dienst(en)?\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
+        page.getByText(/Je streefbereik is (\d+ (of|tot en met) \d+ \w+diensten|hoogstens \d+ \w+dienst(en)?|\d+ \w+dienst(en)?)\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
       ).toBeVisible();
+      await expect(page.getByText(/streefaantal is ongeveer/)).toHaveCount(0);
     } finally {
       await context.close();
     }
@@ -240,6 +251,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     try {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const stored = db
@@ -252,6 +264,34 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
       await page.getByRole('button', { name: '🔔 Meldingen' }).click();
       await expect(page.getByText(stored[0].onderwerp).first()).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+  // Audit 1.2.2: "Publicatie intrekken" promised every participant a melding, but the Meldingen
+  // button and panel were only there while the roster was published, so nobody could read it; and
+  // the page then said both "wijzigen kan niet meer" and "Wijzigingen die je nu opslaat, worden
+  // bewaard". Runs last: it takes the publication back.
+  test('after Publicatie intrekken the participant can read the melding, under one honest banner', async ({ page, browser }) => {
+    await gotoPlanner(page);
+    await page.getByRole('button', { name: '↩️ Publicatie intrekken' }).click();
+    const dialoog = page.getByRole('dialog', { name: 'Publicatie intrekken' });
+    await expect(dialoog).toContainText('Er gaat geen mail.');
+    await dialoog.getByRole('button', { name: 'Ja, publicatie intrekken' }).click();
+    // The status reads in the header and in the period's own block.
+    await expect(page.getByText(/Status: Gegenereerd/).first()).toBeVisible();
+
+    const context = await browser.newContext();
+    const deelnemer = await context.newPage();
+    try {
+      await deelnemer.goto(`${getBaseUrl()}/person/${testData.users[1].token}`);
+      await deelnemer.waitForLoadState('networkidle');
+      await expect(deelnemer.getByTestId('rooster-nog-niet-gepubliceerd')).toContainText('nog niet gepubliceerd');
+      // One banner: not also "De planner heeft deze periode gesloten" (audit 1.3.0).
+      await expect(deelnemer.getByText(/De planner heeft deze periode gesloten/)).toHaveCount(0);
+      await expect(deelnemer.getByText(/Wijzigingen die je nu opslaat/)).toHaveCount(0);
+      await deelnemer.getByRole('button', { name: '🔔 Meldingen' }).click();
+      await expect(deelnemer.getByText(/publicatie ingetrokken/).first()).toBeVisible();
     } finally {
       await context.close();
     }

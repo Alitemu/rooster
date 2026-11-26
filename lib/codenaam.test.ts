@@ -59,7 +59,7 @@ describe('validateCodenaam', () => {
   });
 
   it('rejects an e-mail address, which the app must never store', () => {
-    const result = validateCodenaam('jan@ziekenhuis.nl');
+    const result = validateCodenaam('jan@organisatie.example');
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.message).toContain('geen e-mailadres');
   });

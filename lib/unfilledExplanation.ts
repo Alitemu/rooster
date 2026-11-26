@@ -82,7 +82,7 @@ export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: Bere
     const shown = ranges.length > 3 ? `${ranges.slice(0, 3).join(', ')} en nog ${ranges.length - 3} keer` : ranges.join(', ');
     lines.push(
       `Voor ${aantal(geenLid.length, 'dienst', 'diensten')} is op die dag niemand lid van de pool: ${shown}. ` +
-        'Controleer Geldig vanaf en Geldig tot bij Medewerkers.'
+        'Controleer Geldig vanaf en Geldig tot bij Personeel beheren.'
     );
   }
 
@@ -95,7 +95,7 @@ export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: Bere
   if (deelsLid > 0 && (tekorten.length > 0 || unfilled.length > geenLid.length + geblokkeerd.length)) {
     lines.push(
       `${deelsLid === 1 ? '1 persoon doet' : `${deelsLid} mensen doen`} volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. ` +
-        `${deelsLid === 1 ? 'Het streefbereik van die persoon' : 'Hun streefbereik'} is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Medewerkers.`
+        `${deelsLid === 1 ? 'Het streefbereik van die persoon' : 'Hun streefbereik'} is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Personeel beheren.`
     );
   }
 

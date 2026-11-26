@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/db/client';
@@ -12,7 +12,9 @@ import {
   blokkadeTellers,
   loadAiosPeriode,
   loadAiosVoorkeurDagen,
+  loadAiosVoorkeurDagenVoor,
   loadAiosWens,
+  markeerNietInDienst,
   saveAiosWens,
   setAiosVoorkeur,
 } from './aiosPreferences';
@@ -214,6 +216,23 @@ describe('marking an AIOS dienst', () => {
   });
 });
 
+describe('a day outside Geldig vanaf/tot (1.1.4)', () => {
+  // Hard rule 1: the solver never gives one there, so the AIOS's screen shows it as niet in dienst.
+  it('is marked niet in dienst, takes no mark, also for a block that reaches past it', () => {
+    const g = person('g');
+    // Leaves on Monday 17 April 2034: the block zo 16 t/m di 18 reaches past it.
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE person_id = ?').run('2034-04-17', g);
+    const dagen = markeerNietInDienst(g, ids.period, loadAiosVoorkeurDagen(g, ids.period));
+    const op = (datum: string) => dagen.find((d) => d.datum === datum)!.diensten.map((x) => x.niet_in_dienst);
+    expect(op('2034-04-17').every((x) => x === false)).toBe(true);
+    expect(op('2034-04-18').every((x) => x === true)).toBe(true);
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-19', 'UD'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'NIET_IN_DIENST' });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-16', 'ADW'), 'ABSOLUUT')).toMatchObject({ ok: false, code: 'NIET_IN_DIENST' });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-19', 'UD'), null)).toEqual({ ok: true });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-17', 'UD'), 'VOORKEUR')).toEqual({ ok: true });
+  });
+});
+
 describe('the 50% counters', () => {
   /** The blocks of this kind in the quarter without a feestdag in them: what can be blocked. */
   const blokTotaal = (soort: string, vormen: string[]) =>
@@ -300,7 +319,6 @@ describe('what an AIOS asks besides', () => {
       ok: false,
       message: expect.stringMatching(/binnen het kwartaal/),
     });
-    expect(saveAiosWens(f, period, { opmerking: 'x'.repeat(121) })).toMatchObject({ ok: false });
     expect(saveAiosWens(f, period, { vier_avonden: 'ja' })).toMatchObject({ ok: false });
 
     expect(
@@ -309,7 +327,6 @@ describe('what an AIOS asks besides', () => {
         twee_dagdiensten: true,
         inwerken_van: '2034-04-05',
         inwerken_tot: '2034-05-04',
-        opmerking: '  Liever geen nachten in juni  ',
       })
     ).toEqual({ ok: true });
     expect(loadAiosWens(f, ids.period)).toEqual({
@@ -320,8 +337,10 @@ describe('what an AIOS asks besides', () => {
       inwerken_tot: '2034-05-04',
       onderbreking_van: null,
       onderbreking_tot: null,
-      opmerking: 'Liever geen nachten in juni',
     });
+    // The free text for general requests is gone (0.97.0): an old client that still sends it changes nothing.
+    expect(saveAiosWens(f, period, { vier_avonden: true, opmerking: 'Liever geen nachten in juni' })).toEqual({ ok: true });
+    expect(loadAiosWens(f, ids.period)).not.toHaveProperty('opmerking');
   });
 });
 
@@ -381,5 +400,38 @@ describe('the routes', () => {
     } finally {
       db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2034-02-01T17:00' WHERE id = ?`).run(ids.period);
     }
+  });
+});
+
+
+describe('the days of several people at once', () => {
+  it('gives each exactly what the call for one gives, and reads the period twice for all of them', () => {
+    const p1 = person('veel1');
+    const p2 = person('veel2');
+    const p3 = person('veel3');
+    expect(setAiosVoorkeur(p1, ids.period, slot('2034-05-02', 'AD'), 'ABSOLUUT')).toEqual({ ok: true });
+    expect(setAiosVoorkeur(p2, ids.period, slot('2034-05-04', 'UD'), 'VOORKEUR')).toEqual({ ok: true });
+    const alle = [ids.a, p1, p2, p3];
+
+    const spy = vi.spyOn(db, 'prepare');
+    const veel = loadAiosVoorkeurDagenVoor(alle, ids.period);
+    const lezingen = spy.mock.calls.length;
+    spy.mockRestore();
+    // The diensten once, the marks once: not once per person (72 AIOS took 817 queries).
+    expect(lezingen).toBe(2);
+
+    for (const id of alle) expect(veel.get(id), id).toEqual(loadAiosVoorkeurDagen(id, ids.period));
+    const niveaus = (id: string) => veel.get(id)!.flatMap((d) => d.diensten).filter((d) => d.level).map((d) => d.level);
+    // Not mixed up between people: the marks of the one are not on the other.
+    expect(niveaus(p1).length).toBeGreaterThan(0);
+    expect(new Set(niveaus(p1))).toEqual(new Set(['ABSOLUUT']));
+    expect(new Set(niveaus(p2))).toEqual(new Set(['VOORKEUR']));
+    expect(niveaus(p3)).toEqual([]);
+  });
+
+  it('gives an empty roster of days for nobody and knows only the people it was asked for', () => {
+    expect(loadAiosVoorkeurDagenVoor([], ids.period).size).toBe(0);
+    const alleenA = loadAiosVoorkeurDagenVoor([ids.a], ids.period);
+    expect([...alleenA.keys()]).toEqual([ids.a]);
   });
 });

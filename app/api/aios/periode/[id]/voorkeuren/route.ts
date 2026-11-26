@@ -11,7 +11,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { blokkadeTellers, loadAiosPeriode, loadAiosVoorkeurDagen, loadAiosWens, telMarkeringen } from '@/lib/aiosPreferences';
+import { blokkadeTellers, loadAiosPeriode, loadAiosVoorkeurDagenVoor, loadAiosWens, telMarkeringen } from '@/lib/aiosPreferences';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -46,8 +46,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       ingediend_op: string | null;
     }>;
 
+    const voorkeurDagen = loadAiosVoorkeurDagenVoor(leden.map((l) => l.id), id);
     const deelnemers = leden.map((l) => {
-      const dagen = loadAiosVoorkeurDagen(l.id, id);
+      const dagen = voorkeurDagen.get(l.id)!;
       return {
         person_id: l.id,
         codenaam: l.codenaam,

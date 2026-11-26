@@ -13,9 +13,39 @@ const PERIOD_STATUS_LABELS: Record<string, string> = {
   GEPUBLICEERD: 'gepubliceerd',
 };
 
+/**
+ * Back to open is from GESLOTEN only: what to do first from the later
+ * statuses. The route answers with these words and the page shows them
+ * (components/AiosPeriodeStatus.tsx).
+ */
+export const EERST_VERWIJDEREN: Record<string, string> = {
+  GEGENEREERD: 'Het rooster is al gemaakt. Verwijder eerst het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
+  GEPUBLICEERD:
+    'Het rooster is gepubliceerd. Trek eerst de publicatie in, bij Publiceren. Verwijder daarna het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
+};
+
+/**
+ * What the status bar says after "Terug naar open" was asked: the text of the
+ * status the period has now, nothing once it changed (the roster removed, a
+ * publication taken back), so it never says what no longer holds.
+ */
+export function eerstVerwijderenUitleg(gevraagd: boolean, status: string): string | null {
+  return gevraagd ? (EERST_VERWIJDEREN[status] ?? null) : null;
+}
+
 /** "gesloten" for GESLOTEN; an unknown value is passed through lowercased. */
 export function periodStatusLabel(status: string): string {
   return PERIOD_STATUS_LABELS[status] ?? status.toLowerCase();
+}
+
+/**
+ * What the heading of the roster section says in brackets, "Dienstrooster (...)": not made yet, made by
+ * the solver, changed by hand since, or published.
+ */
+export function aiosDienstroosterStatus(status: string, handmatig: boolean): string {
+  if (status === 'GEPUBLICEERD') return 'gepubliceerd';
+  if (status === 'GEGENEREERD') return handmatig ? 'handmatig aangepast' : 'automatisch ingevuld';
+  return 'nog niet gegenereerd';
 }
 
 /** "maandag 1 maart 2027". The date is a calendar day, so no timezone may shift it. */
@@ -27,4 +57,13 @@ export function formatSwapDate(datum: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${datum}T00:00:00Z`));
+}
+
+/**
+ * The period in a mail subject, with "AIOS" in front only when its name does not already start with it:
+ * a new AIOS period is called "AIOS 2027 Q1" (app/planner/page.tsx), and the subjects read "Definitief
+ * rooster AIOS AIOS 2027 Q1" (audit 1.2.2).
+ */
+export function aiosPeriodeInOnderwerp(naam: string): string {
+  return /^aios\b/i.test(naam.trim()) ? naam.trim() : `AIOS ${naam.trim()}`;
 }

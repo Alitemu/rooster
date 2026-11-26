@@ -282,3 +282,36 @@ describe('a generation replaces the roster the last "ongedaan maken" belonged to
     expect(getPendingUndo(p1.id)).toBeUndefined();
   });
 });
+
+describe('the period before has to be published first', () => {
+  it('refuses with 409 while it is not, and runs once it is', async () => {
+    newPool();
+    const p0 = period('2031-05-05', 'GEGENEREERD', ['A', 'B', 'C', 'D', 'A', 'B', 'C', 'D', 'A', 'B', 'C', 'D', 'A', 'B']);
+    const p1 = period('2031-05-19', 'GESLOTEN');
+
+    const refused = await generate(p1.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('VORIGE_PERIODE_NIET_GEPUBLICEERD');
+    expect(received).toEqual([]);
+
+    db.prepare(
+      `UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD', gepubliceerd_op = ?, definitief_op = ?, overloop_bevestigd_op = ? WHERE id = ?`
+    ).run(new Date().toISOString(), new Date().toISOString(), new Date().toISOString(), p0.id);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET overloop_bevestigd_op = ? WHERE id = ?`).run(new Date().toISOString(), p1.id);
+    expect((await generate(p1.id)).status).toBe(200);
+  });
+});
+
+describe('generating needs a closed period', () => {
+  it('refuses an open one (400) and accepts one that is closed', async () => {
+    newPool();
+    const open = period('2031-06-02', 'OPEN');
+    const refused = await generate(open.id);
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toContain('Sluit de periode eerst');
+
+    newPool();
+    const dicht = period('2031-07-14', 'GESLOTEN');
+    expect((await generate(dicht.id)).status).toBe(200);
+  });
+});

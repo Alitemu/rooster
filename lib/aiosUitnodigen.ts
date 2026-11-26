@@ -11,6 +11,7 @@
  * achterwacht's "Link kwijt?" and automatic reminders run over them.
  */
 
+import { roosterVan } from '@/lib/aiosRoosterVan';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { deadlinePassed } from '@/lib/aiosInvoer';
@@ -81,6 +82,19 @@ export function markeerAiosUitgenodigd(periodId: string, baseUrl: string, now: D
   ).run(periodId, now.toISOString(), baseUrl);
 }
 
+/**
+ * The planner published, made definitief or mailed the roster again under
+ * this address: later mails take their links from it, also when no
+ * invitations went out for the period (a swap mail had no link then).
+ * The invitation moment stays as it was.
+ */
+export function onthoudAiosBasisUrl(periodId: string, baseUrl: string): void {
+  db.prepare(
+    `INSERT INTO dienstrooster_aios_periode (period_id, basis_url) VALUES (?, ?)
+     ON CONFLICT(period_id) DO UPDATE SET basis_url = excluded.basis_url`
+  ).run(periodId, baseUrl);
+}
+
 /** The address for links in a mail no planner request is behind: BASE_URL, or the invitations' address. */
 export function aiosMailBasisUrl(periodId: string): string | null {
   return process.env.BASE_URL || aiosPeriodeStand(periodId).basis_url;
@@ -99,7 +113,7 @@ export function aiosUitnodiging(period: AiosUitnodigPeriode, codenaam: string, l
     onderwerp: `Geef je voorkeuren door voor ${period.naam}`,
     tekst: `Beste ${codenaam},
 
-Het rooster van de AIOS voor ${period.naam} wordt gemaakt. Geef via je persoonlijke link per dienst aan wat je graag doet en wat liever niet. Een avond- of nachtblok geef je in één keer op.
+Het rooster ${roosterVan(period.naam)} wordt gemaakt. Geef via je persoonlijke link per dienst aan wat je graag doet en wat liever niet. Een avond- of nachtblok geef je in één keer op.
 
 Bovenaan het scherm geef je ook je verzoeken op. Doe je avonden of nachten graag in een blok van vier, van woensdag tot en met zaterdag? Doe je graag beide dagdiensten van een weekend? Word je dit kwartaal ingewerkt? Of is je opleiding een tijd onderbroken?
 
@@ -112,7 +126,7 @@ Werk je in deeltijd? Of heb je vakantie of ander verlof? Geef dat op bij de eers
 
 Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(link)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
 
-Heb je vragen? Neem dan contact op met de roosteraar.`,
+Heb je vragen? Neem dan contact op met de planner.`,
   };
 }
 
@@ -162,7 +176,7 @@ export function aiosHerinnering(
     tekst:
       `Beste ${ontvanger.codenaam},\n\n${kern}\n\n` +
       (laatste ? 'Dit is de laatste herinnering. Na de deadline kun je niets meer aanpassen.\n\n' : '') +
-      `Ga naar je persoonlijke link:\n${link}\n\nHeb je vragen? Neem dan contact op met de roosteraar.`,
+      `Ga naar je persoonlijke link:\n${link}\n\nHeb je vragen? Neem dan contact op met de planner.`,
   };
 }
 

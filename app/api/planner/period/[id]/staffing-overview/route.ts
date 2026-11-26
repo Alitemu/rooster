@@ -15,8 +15,10 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { TELLERS, type Teller } from '@/lib/rosterBands';
+import { TELLERS, computeMemberTargets, type Teller } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
+import { isAiosPeriod } from '@/lib/aiosPeriod';
+import { buitenBereik, streefbereikRij, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 
 interface StaffingRow {
   person_id: string;
@@ -26,6 +28,10 @@ interface StaffingRow {
   FEESTDAG: number;
   totaal: number;
   fellow: boolean;
+  // 2.2.0: what this person should get, saldo included, and the kinds where they fall outside it (only once
+  // the roster has diensten in it: before that everyone is "outside").
+  streefbereik: StreefbereikRij | null;
+  buiten: string[];
 }
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -76,6 +82,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
           FEESTDAG: 0,
           totaal: 0,
           fellow: fellows.has(row.person_id),
+          streefbereik: null,
+          buiten: [],
         };
         byPerson.set(row.person_id, entry);
       }
@@ -83,6 +91,23 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
         entry[row.teller as Teller] = row.count;
       }
       entry.totaal += row.count;
+    }
+
+    // Everyone with a streefbereik, also who got no dienst at all: that is the person a planner looks for
+    // (2.2.0). The list showed only who was on duty.
+    const targets = isAiosPeriod(periodId) ? new Map() : computeMemberTargets(periodId);
+    const heeftRooster = rows.length > 0;
+    const naam = db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?');
+    for (const [personId, target] of targets) {
+      let entry = byPerson.get(personId);
+      if (!entry) {
+        const p = naam.get(personId) as { codenaam: string } | undefined;
+        if (!p) continue;
+        entry = { person_id: personId, codenaam: p.codenaam, AVOND: 0, WEEKEND: 0, FEESTDAG: 0, totaal: 0, fellow: fellows.has(personId), streefbereik: null, buiten: [] };
+        byPerson.set(personId, entry);
+      }
+      entry.streefbereik = streefbereikRij(target);
+      entry.buiten = heeftRooster ? buitenBereik(target, entry) : [];
     }
 
     const staff = Array.from(byPerson.values()).sort((a, b) => a.codenaam.localeCompare(b.codenaam));

@@ -13,7 +13,9 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { vorigeInstellingen, type VorigeInstellingen } from '@/lib/vorigeInstellingen';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PeriodDetail {
@@ -30,8 +32,16 @@ interface PeriodDetail {
   definitief_op: string | null;
   row_version: number;
   verwijderd_op: string | null;
+  // When the invitations went out (lib/activePeriod.ts markInvited): the period page warns that they named
+  // the old streefbereik when it is changed afterwards (R-06, 1.7.0). Not in the participant's view.
+  uitgenodigd_op: string | null;
   // The pool's dienst: an AIOS period gets its own page (lib/aiosPeriod.ts).
   pool_type: string;
+}
+
+/** For the planner: a concept also gets what Rooster instellen starts from (lib/vorigeInstellingen.ts). */
+interface PlannerPeriodDetail extends PeriodDetail {
+  vorige_instellingen: VorigeInstellingen | null;
 }
 
 /**
@@ -88,6 +98,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         sp.definitief_op,
         sp.row_version,
         sp.verwijderd_op,
+        sp.uitgenodigd_op,
         pl.type AS pool_type
       FROM dienstrooster_schedule_period sp
       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
@@ -101,7 +112,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         success: false,
         error: {
           code: 'PERIOD_NOT_FOUND',
-          message: `Periode met ID ${id} niet gevonden`,
+          message: 'Periode niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });
@@ -119,7 +130,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
           success: false,
           error: {
             code: 'PERIOD_NOT_FOUND',
-            message: `Periode met ID ${id} niet gevonden`,
+            message: 'Periode niet gevonden',
           },
         };
         return NextResponse.json(response, { status: 404 });
@@ -141,9 +152,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
 
-    const response: ApiSuccessResponse<PeriodDetail> = {
+    const response: ApiSuccessResponse<PlannerPeriodDetail> = {
       success: true,
-      data: row,
+      data: { ...row, vorige_instellingen: row.status === 'CONCEPT' ? vorigeInstellingen(row.id) : null },
     };
 
     return NextResponse.json(response);
@@ -235,6 +246,14 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     if (otherDienst) return otherDienst;
 
     const { id } = params;
+
+    // A roster that is being made would be written into the prullenbak when it is ready.
+    if (hasRunningJobForPeriod(id)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'GENERATION_RUNNING', message: GENERATION_RUNNING_MESSAGE } },
+        { status: 409 }
+      );
+    }
 
     try {
       softDeletePeriod(id, auth!.userId);

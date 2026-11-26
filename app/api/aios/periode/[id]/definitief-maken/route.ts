@@ -6,6 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBaseUrl } from '@/lib/baseUrl';
+import { onthoudAiosBasisUrl } from '@/lib/aiosUitnodigen';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -22,6 +24,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const period = laadAiosPeriode(id);
     if (period instanceof NextResponse) return period;
     const body = await parseJsonBody<{ bevestigd: unknown }>(req);
+    // The address of this request, for the links in later mails (a swap mail too): lib/aiosUitnodigen.ts.
+    onthoudAiosBasisUrl(period.id, resolveBaseUrl(req));
     const uitkomst = await maakAiosDefinitief(period, body.bevestigd === true, auth!.userId);
     if (!uitkomst.ok) {
       const { status, code, message, controle } = uitkomst;

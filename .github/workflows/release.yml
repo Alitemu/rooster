@@ -51,15 +51,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Everything this release needs is checked before `stable` moves: a release that stops halfway left
+      # production on a mixed set (web and solver on the new version, the AIOS's solver on the old).
+      - name: Check the images and the tag
+        env:
+          VERSIE: ${{ inputs.versie }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          images="web solver"
+          # The AIOS's solver exists from 0.74.0 on; an older version has none and leaves its stable where it is.
+          if [ "$(printf '%s\n0.74.0\n' "$VERSIE" | sort -V | head -n 1)" = "0.74.0" ]; then
+            images="$images aios-solver"
+          fi
+          for name in $images; do
+            if ! docker buildx imagetools inspect "ghcr.io/alitemu/rooster-$name:$VERSIE" > /dev/null; then
+              echo "::error::rooster-$name:$VERSIE bestaat niet. Bouw eerst deze versie met Bouwen (test)."
+              exit 1
+            fi
+          done
+          tag="v$VERSIE"
+          if ! git rev-parse -q --verify "refs/tags/$tag" > /dev/null && ! gh release view "$tag" > /dev/null 2>&1; then
+            echo "::error::Tag $tag bestaat niet. Versies vanaf 0.72.0 krijgen die bij Bouwen (test). Maak hem voor een oudere versie met de hand op de commit van die versie."
+            exit 1
+          fi
+
       - name: Point stable at this version
         env:
           VERSIE: ${{ inputs.versie }}
         run: |
-          for name in web solver; do
-            image="ghcr.io/alitemu/rooster-$name"
-            # Fails (and stops here) when that version was never built.
-            docker buildx imagetools inspect "$image:$VERSIE" > /dev/null
-          done
           for name in web solver; do
             image="ghcr.io/alitemu/rooster-$name"
             docker buildx imagetools create --tag "$image:stable" "$image:$VERSIE"
@@ -73,12 +97,6 @@ jobs:
             echo "rooster-aios-solver $VERSIE bestaat niet (ouder dan 0.74.0): stable blijft staan." >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "Versie $VERSIE staat nu klaar voor productie (stable)." >> "$GITHUB_STEP_SUMMARY"
-
-      # The whole history, every branch: the version's commit may be on the
-      # branch it was built from.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          fetch-depth: 0
 
       - name: GitHub release
         env:

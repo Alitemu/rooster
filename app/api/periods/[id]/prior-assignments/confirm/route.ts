@@ -18,6 +18,7 @@ import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { telwoord } from '@/lib/telwoord';
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -90,7 +91,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         success: false,
         error: {
           code: 'INCOMPLETE',
-          message: `Overloopgegevens zijn nog niet compleet: ${entryCount} van ${expectedCount} regels ingevuld`,
+          message: `Overloopgegevens zijn nog niet compleet: ${entryCount} van ${telwoord(expectedCount, 'regel', 'regels')} ingevuld`,
         },
       };
       return NextResponse.json(response, { status: 400 });

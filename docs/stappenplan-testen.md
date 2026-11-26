@@ -1,0 +1,295 @@
+# Stappenplan: de applicatie zelf testen
+
+Een lijst om af te vinken, zodat je niets vergeet. Doe de blokken in
+volgorde. Per regel staat wat je doet en wat je moet zien. Klopt iets niet,
+noteer dan het nummer van de regel en wat je zag.
+
+Voor een heel AIOS-kwartaal stap voor stap staat er ook
+`docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
+staat in `docs/teststrategie.md`.
+
+Dit stappenplan hoort bij versie 2.2.0. Reken op drie tot vier uur. Gebruik de
+testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
+dus er gaat niets echt weg.
+
+## Blok A. Installeren en bijwerken
+
+- [ ] **A1.** Nieuwe, lege map met alleen `docker-compose.yml`. Voer uit:
+  `docker compose up -d`. Je ziet: vier containers (`caddy`, `web`, `solver`,
+  `aios-solver`) bij `docker compose ps`, na een minuut allemaal gezond.
+- [ ] **A2.** Open `https://<server>`. Je ziet: de inlogpagina. Bij het
+  interne certificaat hoort een certificaatwaarschuwing.
+- [ ] **A3.** Open `http://<server>`. Je ziet: je gaat vanzelf naar `https://`.
+- [ ] **A4.** Rechts van de titel staat het juiste versienummer.
+- [ ] **A5.** Bestaande installatie: maak eerst een back-up (blok J), dan
+  `docker compose pull` en `docker compose up -d`. Je ziet: nieuwe versie, en je
+  gegevens, accounts en mailinstellingen zijn er nog.
+- [ ] **A6.** Draait de server op een andere poort (`APP_PORT` in `.env`)?
+  Open dan het adres met die poort en controleer ook daar stap A3.
+
+## Blok B. Inloggen en accounts
+
+- [ ] **B1.** Log in als beheerder met het startwachtwoord. De pagina heet
+  *Inloggen voor planners en beheerders*. Je moet direct een nieuw wachtwoord
+  kiezen en kunt daarvoor niets anders doen. Een te kort wachtwoord en het
+  startwachtwoord zelf worden geweigerd.
+- [ ] **B2.** Een fout wachtwoord geeft een Nederlandse melding. Na een paar
+  keer volgt een tijdelijke blokkade.
+- [ ] **B3.** *Accounts beheren*: maak een planner voor de achterwacht en een
+  planner voor de AIOS. Je ziet: elk met het tijdelijke wachtwoord en de
+  juiste dienst.
+- [ ] **B3a.** Maak een account om uit te proberen en klik op *Verwijderen*.
+  Je ziet: eerst de vraag of je het zeker weet, daarna is het account weg.
+  Bij een account dat al iets heeft gewijzigd staat geen *Verwijderen*.
+- [ ] **B3b.** Schakel een account uit. Je ziet: het account verdwijnt uit de lijst
+  en de melding zegt waar het staat. Vink *Toon uitgeschakelde accounts* aan.
+  Je ziet: het account staat er weer, met *Inschakelen*.
+- [ ] **B4.** Log in als elke planner. De planner van de achterwacht ziet niets
+  van de AIOS, en andersom. Plak je het adres van een periode van de andere
+  dienst, dan staat er *Deze periode bestaat niet of hoort bij de andere dienst.*
+  De beheerder ziet beide diensten.
+- [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede
+  browser (die is dan ook uitgelogd).
+- [ ] **B6.** Noodweg voor de beheerder (de mail moet ingesteld zijn): vul op de
+  startpagina bij *Link kwijt* het Gmail-adres van de Mailinstellingen in. Je
+  ziet dezelfde melding als bij elk adres. In dat Gmail-account komt een mail
+  met een link. Kies daarmee een nieuw wachtwoord. Daarna werkt de link niet
+  meer, je bent overal uitgelogd en je logt in met het nieuwe wachtwoord.
+
+## Blok C. Achterwacht: een periode van begin tot eind
+
+- [ ] **C1.** Maak een nieuwe periode met de wizard. Sluit de wizard halverwege, open
+  hem opnieuw en ga direct naar stap 7. Je ziet: het juiste aantal actieve mensen,
+  het streefbereik in woorden en *Klaar om te openen*. De bereiken
+  (streefaantallen) staan in woorden, nooit als `[7,8]` of `-1`.
+- [ ] **C0.** Loop een periode door en lees bij elke stap de regel *Volgende stap*
+  bovenaan de periodepagina. Je ziet: steeds de stap die nu aan de beurt is, in
+  de volgorde uitnodigen, herinneren, sluiten, genereren, aanvullen, voorlopig,
+  definitief. De knop eronder gaat naar de goede knop en voert zelf niets uit.
+- [ ] **C0a.** Open een periode. Je ziet: de lijst met onderdelen helemaal links
+  onder de blauwe balk, met *Periode* bovenaan en daaronder vier groepjes. Rechts
+  staat *Volgende stap* en het onderdeel waar die stap over gaat. In de blauwe
+  balk staan de naam van de periode en de status. Er is geen knop om naar een
+  andere indeling te wisselen. Elk onderdeel opent met een klik. De terugknop van
+  de browser gaat naar het vorige onderdeel. Klik op de naam van een persoon en
+  daarna op *Terug naar periode*: je komt in dezelfde indeling terug.
+- [ ] **C0b.** Open het onderdeel *Periode*. Je ziet: de
+  data, de deadline, het streefbereik, de status en de knoppen die bij deze
+  status horen. Klik bij een periode waarvan de deadline voorbij is op de knop
+  van *Volgende stap*: je komt in *Periode* uit, op de knop *Periode sluiten*.
+- [ ] **C0c.** Doe hetzelfde op een telefoon. Je ziet meteen een onderdeel. De
+  knop met drie streepjes staat in de blauwe balk, links van *Dienstrooster*,
+  met de periode en de status eronder. Een tik toont de lijst vanaf links.
+  Kies een onderdeel: de lijst sluit en het onderdeel staat er vanaf de titel.
+  Scrol naar beneden: de blauwe balk blijft bovenaan staan.
+- [ ] **C0d.** Open een kwartaal van de AIOS. Je ziet: dezelfde indeling als bij de
+  achterwacht, met de naam van het kwartaal en de status in de blauwe balk.
+  *Periode* bevat het rooster maken. De pagina die een AIOS via de link ziet, is
+  niet veranderd.
+- [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
+  naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
+  nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de
+  pagina dat ze het oude aantal noemden. Een minimum boven het maximum wordt
+  geweigerd met een Nederlandse melding.
+- [ ] **C2.** Personeel toevoegen en een geldigheidsperiode aanpassen. Een
+  collega die halverwege start, verschijnt in de keuzelijst bij handmatig
+  toewijzen. Een codenaam van de andere dienst wordt geweigerd.
+- [ ] **C2a.** Een collega die nog niet gestart is en nog geen toegang heeft: zie
+  in de README *Een collega die nog niet gestart is*. Je ziet: de voorkeuren
+  uit het Excel-bestand staan na *Controleren* en *Toepassen* in het rooster.
+- [ ] **C3.** Vooraf invullen en eerdere toewijzingen: vul een paar in en kijk
+  of ze in het rooster terugkomen.
+- [ ] **C3a.** Oud saldo (wizard, stap *Saldi*) en *Eerdere toewijzingen*:
+  klik op *Sjabloon downloaden (Excel)*, vul het in en upload het weer. Je ziet:
+  een samenvatting van wat er geïmporteerd wordt. Een CSV of een Excel-bestand
+  met andere kolommen wordt geweigerd met een Nederlandse melding die de goede
+  kolommen noemt. Het gedownloade rooster (Excel) kan bij *Eerdere toewijzingen*
+  terug.
+- [ ] **C3b.** Importeer een beginsaldo en kies daarna in stap *Saldi* een tweede
+  bestand met dezelfde codenaam. Je ziet: een waarschuwing met de naam, die zegt
+  dat de waarden worden overschreven en dat een leeg vakje 0 wordt. *Annuleren*
+  neemt niets mee, *Ja, overschrijven* wel.
+- [ ] **C3c.** Open een periode die al open is en kies in de lijst het onderdeel
+  *Import en correcties*. Download het sjabloon, upload een beginsaldo en
+  voeg een correctie toe. Je ziet: een melding dat het is opgeslagen en de
+  correctie in de lijst, in woorden ("1 avonddienst minder"). Na het genereren
+  heeft die persoon zoveel diensten meer of minder. Is het rooster al
+  gegenereerd, dan zegt de sectie dat het niet meer kan en waarom.
+- [ ] **C4.** *Exporteren & communicatie* en dan *Uitnodigingen en
+  herinneringen*: download de uitnodigingen. Je ziet: een bestand met per
+  persoon een link.
+- [ ] **C5.** Open een link als medewerker (privévenster). Geef voorkeuren op:
+  geblokkeerd, liever niet, voorkeur, parttime. De vijf toestanden zijn
+  zichtbaar verschillend, ook in zwart-wit. Boven de kalender staat *Tik of klik
+  op een dienst om te wisselen tussen beschikbaar, voorkeur, liever niet en
+  geblokkeerd.* Op een computer met muis staat daarachter dat je met de
+  rechtermuisknop de stand direct kiest, op een telefoon niet. De tooltip zegt
+  wat de volgende tik doet.
+- [ ] **C6.** Hand de voorkeuren in. De samenvatting bij *Bevestigen* noemt de
+  dagen geblokkeerd, voorkeur en liever niet. *Status voorkeuren* bij de planner
+  telt mee.
+- [ ] **C6a.** Klik bij de planner één keer op *Periode sluiten*. Je ziet vóór de
+  tweede klik hoeveel deelnemers nog niet bevestigden en hoeveel nog niets
+  invulden.
+- [ ] **C7.** *Rooster opnieuw genereren met solver*. Je ziet: geen lege
+  diensten, geen dienst op een geblokkeerde dag, niemand twee diensten in één
+  week. Onder het resultaat staat het streefbereik in woorden ("avond 2 of 3
+  diensten"), niet als "2-3".
+- [ ] **C7a.** Laat een dienst leeg of haal er een weg en open *Dienstrooster*,
+  tabblad *Lijst*. Je ziet: de lege dienst als eigen rij met "nog niemand" en
+  *Iemand toewijzen*. Het scherm om lege diensten in te vullen heet na het
+  genereren *Lege diensten aanvullen* en is op een telefoon leesbaar: de datum
+  op één regel, de keuzelijst eronder.
+- [ ] **C8.** Wijzig een dienst met de hand, klik op *Ongedaan maken* binnen
+  twee minuten. Na twee minuten of na verversen is de knop weg. Doe het ver
+  onderaan in de lijst en in de kalender: de rij of dag blijft op dezelfde plek
+  in beeld, ook als de melding *Laatst gewijzigd* bovenaan verschijnt en
+  verdwijnt.
+- [ ] **C9.** Publiceren: de publicatiecontrole noemt wat niet klopt. Publiceer,
+  maak definitief, trek de publicatie in en publiceer weer.
+- [ ] **C9a.** Open als medewerker de link bij het voorlopige rooster (op een
+  telefoon). Je ziet: *Jouw rooster* staat open met je diensten. Bij het saldo
+  staat *Je streefbereik is 2 of 3 avonddiensten*, niet "ongeveer 3".
+- [ ] **C9b.** Kijk bij *Status voorkeuren* en bij *Dienstdoende* in de kolom
+  *Streefbereik*. Je ziet: per persoon het bereik per soort in woorden. Bij wie een
+  beginsaldo of correctie heeft, staat erbij hoeveel diensten extra of minder dat
+  geeft. *Dienstdoende* toont ook wie geen dienst heeft, en na het genereren wie
+  buiten het eigen bereik valt.
+- [ ] **C10.** Saldo's: kloppen de aantallen diensten meer en minder met wat je
+  verwacht, en staan ze in woorden ("1 avonddienst minder")?
+- [ ] **C11.** *Rooster verwijderen* en de periode naar de *Prullenbak*. Je ziet:
+  hij is er terug te zetten. Terugzetten werkt.
+
+## Blok D. Ruilen en afwezigheid (achterwacht)
+
+- [ ] **D1.** Als medewerker: *+ Ruilverzoek* indienen voor een dienst in een
+  definitief rooster. Bij een voorlopig rooster kan het niet.
+- [ ] **D2.** Open de link van de collega. Je ziet: naast *Ruilen* staat dat er een
+  verzoek op antwoord wacht en de lijst staat al open. *Goedkeuren* vraagt eerst
+  om bevestiging. Kies *Ja, ruilen*. Je ziet: de diensten zijn gewisseld in het
+  rooster van beiden.
+- [ ] **D3.** Een ruil afwijzen en een ruil laten intrekken door het rooster
+  (bijvoorbeeld na een wijziging). De uitkomst is in woorden en "ingetrokken".
+- [ ] **D4.** Afwezigheid opgeven en weer weghalen. De datums zijn eerst leeg. Na
+  een begindatum staat de einddatum op de dag erna. Parttimedagen kloppen met
+  de factor in *Personeel beheren*.
+
+## Blok E. AIOS: een kwartaal
+
+Volg hiervoor `docs/aios-testdraaiboek.md`. Dit zijn de punten die je niet mag
+overslaan:
+
+- [ ] **E1.** Geschiedenis van vóór de app inlezen en het kwartaal ervandaan
+  laten starten. Lees daarna een tweede bestand in met maar één AIOS. *Bewaren*
+  vraagt eerst om bevestiging en noemt wie daarna geen geschiedenis meer heeft.
+- [ ] **E2.** Voorkeuren van een AIOS op de eigen pagina (375 px breed), met
+  blokken van nachten en een toelichting per dag.
+- [ ] **E3.** Voorkeurenoverzicht downloaden, aanpassen en terug importeren
+  (alleen de beheerder). Eerst controleren, dan toepassen.
+- [ ] **E3a.** Het onderdeel *Blokken rond de feestdagen* staat in de lijst en zegt
+  *nog te beantwoorden*. In *Periode* is *Rooster maken* uit en de melding heeft
+  een knop *Naar Blokken rond de feestdagen*. Na *Keuzes bewaren* kan het wel.
+- [ ] **E4.** Rooster maken met de AIOS-solver. Hebben te weinig AIOS parttimedagen
+  opgegeven, dan staat er vóór het maken een gele waarschuwing over de nachtblokken
+  van zondag tot en met dinsdag. Geen lege diensten die er niet
+  hoeven te zijn, en de uitleg bij lege diensten klopt.
+- [ ] **E5.** Publiceren, definitief maken, daarna ruilen tussen twee AIOS. Bij
+  een voorlopig rooster zegt de app dat ruilen pas kan als het definitief is.
+- [ ] **E6.** Een AIOS ziet niets van een andere AIOS en niets van de
+  achterwacht.
+
+## Blok F. Persoonlijke links (alleen de beheerder)
+
+- [ ] **F1.** Open bij een periode (achterwacht en AIOS) de sectie
+  *Persoonlijke links*. Een planner ziet die sectie niet.
+- [ ] **F2.** De lijst toont één regel per persoon, met het aantal werkende
+  links. *Toon links* laat per link zien wanneer hij gemaakt en voor het laatst
+  gebruikt is en of hij werkt. De link zelf staat er nergens.
+- [ ] **F2a.** Download bij *Exporteren & communicatie* de wijzigingsgeschiedenis
+  nadat je de deadline hebt aangepast. Je ziet: een tweede tabblad *Periode en
+  instellingen* met die wijziging, de oude en de nieuwe deadline en je codenaam.
+- [ ] **F3.** *Intrekken* vraagt eerst om bevestiging. Annuleren verandert
+  niets. Bevestigen: de link werkt niet meer, de medewerker is uitgelogd.
+- [ ] **F4.** Is het de enige werkende link, dan zegt de vraag dat.
+- [ ] **F5.** *Alles intrekken* zegt hoeveel links en medewerkers. Daarna werkt
+  geen enkele link van de periode meer en de knop verdwijnt.
+- [ ] **F6.** Medewerker via *Link kwijt?* een nieuwe link laten aanvragen.
+  Je ziet: weer toegang.
+- [ ] **F7.** Links van een andere periode blijven werken na *Alles
+  intrekken*.
+- [ ] **F8.** Een link werkt tot en met de laatste dag van zijn periode. De dag
+  erna krijg je de melding dat de link verlopen is. Vraag dan een nieuwe aan.
+- [ ] **F9.** *Link kwijt?* drie keer achter elkaar met hetzelfde adres werkt.
+  De vierde keer binnen een uur geeft de melding dat je een uur moet wachten.
+
+## Blok G. Mail en verzendlijst
+
+- [ ] **G1.** *Mailinstellingen* (alleen de beheerder): een Gmail-adres met een
+  app-wachtwoord opslaan. Geef het wachtwoord alleen in de app in. Een
+  verkeerd wachtwoord wordt geweigerd met een duidelijke melding.
+- [ ] **G2.** Zonder instellingen staat bij de knoppen die versturen waarom
+  het niet kan.
+- [ ] **G4.** Bij een gepubliceerd rooster (achterwacht en AIOS) staat de knop
+  *Rooster opnieuw mailen*. Hij vraagt eerst om bevestiging. Daarna gaat de
+  mail van de publicatie (voorlopig of definitief) nog een keer naar iedereen.
+- [ ] **G5.** Twee keer snel achter elkaar op *Herinneringen versturen*
+  klikken stuurt één verzendlijst. De tweede klik krijgt de melding dat er al
+  verstuurd wordt.
+- [ ] **G3.** Op de echte stroom (niet op test): één uitnodiging, één
+  herinnering en één ruilmail komen binnen met de juiste tekst en link. De
+  uitnodiging noemt het streefbereik in woorden ("2 of 3 avonddiensten, hoogstens
+  1 weekenddienst"), niet "ongeveer 3". Bij de AIOS staat "Het rooster voor AIOS
+  2027 Q2", niet "van de AIOS voor AIOS".
+
+## Blok H. Op elk scherm
+
+- [ ] **H1.** Telefoon of venster van 375 px: geen zijwaarts scrollen op de
+  periodepagina, de voorkeurenkalender, *Personeel beheren* en de dialogen.
+- [ ] **H2.** Afdrukken in zwart-wit: het rooster is leesbaar.
+- [ ] **H3.** Alles is Nederlands: geen "Failed to fetch", geen "1 diensten".
+- [ ] **H4.** Weken tonen het ISO-weeknummer. Zaterdag en zondag zijn aparte
+  vakjes.
+- [ ] **H5.** Toetsenbord: je kunt een onderdeel in de lijst kiezen en de dialogen
+  sluiten met Escape.
+- [ ] **H6.** Schermlezer of toetsenbord: elk getalveld in *Rooster genereren* heeft
+  een naam (venster, minimaal en maximaal per soort).
+
+## Blok I. Grenzen en fouten
+
+- [ ] **I1.** Een Excel-import met een kapot of enorm bestand geeft een
+  Nederlandse melding, en de melding noemt de juiste rij.
+- [ ] **I2.** Twee tabbladen tegelijk: wijzig in het ene, kijk in het andere.
+  Tijdens het maken van een rooster geven wijzigingen een melding in plaats van
+  half te gebeuren.
+- [ ] **I3.** Start de AIOS-solver niet (stop de container) en maak een rooster.
+  Je ziet: een nette melding dat de solver niet bereikbaar is, en de
+  achterwacht werkt gewoon door.
+- [ ] **I4.** Herstart alle containers. Gegevens en sessies blijven.
+- [ ] **I5.** Maak een back-up van de map `data` en zet die terug op een lege
+  installatie. Alles is er weer.
+- [ ] **I6.** Open een adres dat niet bestaat, bijvoorbeeld `/bestaat-niet`. Je
+  ziet: een Nederlandse pagina met een knop naar de startpagina.
+
+## Blok J. Terug naar een eerdere versie en back-ups
+
+Zie `docs/installatie-it.md`, *Terug naar een eerdere versie*. Doe dit alleen op de
+testinstallatie.
+
+- [ ] **J1.** Maak in de app (beheerder, *Back-up*) een back-up en bewaar het bestand.
+- [ ] **J2.** Zet `ROOSTER_VERSION` in `.env` op een eerdere versie, voer
+  `docker compose pull` en `docker compose up -d` uit. Je ziet: het oude
+  versienummer en je gegevens. Haal de regel daarna weg en werk weer bij.
+- [ ] **J3.** Zet een back-up van een oudere versie terug in de nieuwere. Je ziet: het
+  lukt en de melding zegt dat de database is bijgewerkt.
+- [ ] **J4.** Zet een back-up van de nieuwere versie terug in de oudere. Je ziet:
+  *Deze back-up is gemaakt door versie ..., nieuwer dan deze app*. Er is niets
+  veranderd.
+- [ ] **J5.** Open die nieuwere back-up op de server met `scripts/back-up-openen.ts` van
+  de oudere versie en vervang de database volgens het hoofdstuk. Je ziet: de
+  oudere versie start en de gegevens van het moment van de back-up staan er.
+
+## Afronden
+
+- [ ] Noteer per blok wat niet klopte, met het regelnummer.
+- [ ] Alles groen? Dan de versie vrijgeven en op productie dezelfde blokken A
+  en F nog eens kort doen, met blok J (een back-up vooraf).

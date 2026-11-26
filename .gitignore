@@ -92,3 +92,4 @@ test-results/
 # First-run setup token hash (see lib/setupToken.ts) - created beside the
 # database whenever a seeded planner account still needs its password set.
 .setup_token_hash
+.mutation-backup/

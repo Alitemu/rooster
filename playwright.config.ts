@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 // both ways of driving a browser resolve the same one. See its doc comment.
 import { chromiumExecutable } from './scripts/chromiumPath.mjs';
 
+const BASIS = process.env.APP_URL || 'http://localhost:3000';
+
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '*.e2e.ts',
@@ -12,7 +14,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: process.env.APP_URL || 'http://localhost:3000',
+    baseURL: BASIS,
     trace: 'on-first-retry',
   },
   webServer: undefined, // Server already running

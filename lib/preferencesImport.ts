@@ -7,7 +7,7 @@
  * /api/admin/period/[id]/preferences-import).
  *
  * Only markings made by hand are imported. A cell the export wrote with a
- * reason - "(parttime)", "(afwezig)", "(fellow)" - comes from a part-time
+ * reason - "(deeltijd)", "(afwezig)", "(fellow)" - comes from a part-time
  * pattern, an absence or the fellow tick, which keep it in sync themselves;
  * such a cell is skipped, and an empty cell never clears one. A plain
  * "geblokkeerd", "liever niet" or "voorkeur" is set as a hand marking, the
@@ -22,7 +22,7 @@
  */
 
 import { db } from '@/db/client';
-import { readFirstSheet, XlsxError } from './xlsx';
+import { readFirstSheetMetRegels, XlsxError } from './xlsx';
 import { markSubmissionStarted } from './submissionStatus';
 import { syncPatternsForPerson } from './parttimeSync';
 import { syncAbsencesForPerson } from './absenceSync';
@@ -30,6 +30,9 @@ import { writePreferencesBackup } from './preferencesBackup';
 import { parseSheetDate } from './isoDate';
 import { withoutFormulaGuard } from './csv';
 import { loadPeriodMembers } from './rosterBands';
+import { isAiosPerson } from './aiosPeriod';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from './rosterGenerationJobs';
+import { isoNaarInvoer } from './datumInvoer';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 
@@ -48,7 +51,8 @@ const TELLER_BY_WORD: Record<string, string> = {
   weekenddienst: 'WEEKEND',
   feestdagdienst: 'FEESTDAG',
 };
-const AUTOMATIC = /^(geblokkeerd|liever niet|voorkeur) \((parttime|afwezig|fellow)\)$/;
+// "(parttime)" is what the overview wrote before 1.3.0: a file downloaded then still imports.
+const AUTOMATIC = /^(geblokkeerd|liever niet|voorkeur) \((deeltijd|parttime|afwezig|fellow)\)$/;
 
 /** Statuses in which a roster already rests on the preferences. */
 const ROSTER_BUILT = ['GEGENEREERD', 'GEPUBLICEERD'];
@@ -85,7 +89,8 @@ interface ImportPeriod {
   eind_datum: string;
 }
 
-function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
+/** `regels`: the Excel row number of each row, so that a message points at the row the user sees. */
+function plan(period: ImportPeriod, rows: string[][], regels?: number[]): { plan: ImportPlan; writes: Write[] } {
   const periodId = period.id;
   const problemen: string[] = [];
   const wijzigingen: ImportChange[] = [];
@@ -109,9 +114,11 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
   }
   const firstPersonCol = Math.max(datumCol, dienstCol, lower.indexOf('dag'), lower.indexOf('week')) + 1;
 
-  const people = db
-    .prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`)
-    .all() as Array<{ id: string; codenaam: string }>;
+  // Not the AIOS's: such a codenaam is as unknown here as one that does not exist, or the message below would
+  // tell whether it exists (docs/development/diensten.md).
+  const people = (
+    db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`).all() as Array<{ id: string; codenaam: string }>
+  ).filter((p) => !isAiosPerson(p.id));
   const exact = new Map(people.map((p) => [p.codenaam, p]));
   const anyCase = new Map(people.map((p) => [p.codenaam.toLowerCase(), p]));
   // Only the period's own participants, the people the overview has a
@@ -121,9 +128,17 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
   const members = new Set(loadPeriodMembers(period).map((m) => m.id));
 
   const columns: Array<{ col: number; id: string; codenaam: string }> = [];
-  for (let col = firstPersonCol; col < header.length; col++) {
+  // The header row can be shorter than the rows under it: a column without a name has no cell there.
+  const breedte = rows.reduce((m, rij) => Math.max(m, rij.length), header.length);
+  for (let col = firstPersonCol; col < breedte; col++) {
     const naam = header[col];
-    if (!naam) continue;
+    if (!naam) {
+      // Without a name it cannot be read; with data in it that is not nothing to say.
+      if (rows.slice(1).some((rij) => (rij[col] ?? '').trim() !== '')) {
+        problemen.push(`Kolom ${col + 1} heeft geen kop maar wel gegevens. Zet er de codenaam van een deelnemer boven of haal de kolom weg.`);
+      }
+      continue;
+    }
     // A codenaam starting with =, +, - or @ was written as '-Anna by the
     // CSV export before 0.20.0 (lib/csv.ts guards against spreadsheet
     // formulas), and Excel keeps that apostrophe: try the name without it
@@ -181,7 +196,7 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
   const seenOn = new Map<string, number>();
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
-    const regel = r + 1;
+    const regel = regels?.[r] ?? r + 1;
     // A date cell is Excel's day number; typed as text it can be 2027-01-04 or 4-1-2027.
     const datum = parseSheetDate(row[datumCol] ?? '');
     const dienstWoord = (row[dienstCol] ?? '').toLowerCase();
@@ -192,12 +207,12 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
     }
     const slotId = slotByKey.get(`${datum}|${teller}`);
     if (!slotId) {
-      problemen.push(`Regel ${regel}: geen ${dienstWoord} op ${datum} in deze periode.`);
+      problemen.push(`Regel ${regel}: geen ${dienstWoord} op ${isoNaarInvoer(datum)} in deze periode.`);
       continue;
     }
     const eerder = seenOn.get(slotId);
     if (eerder !== undefined) {
-      problemen.push(`Regel ${regel}: de ${dienstWoord} op ${datum} staat ook op regel ${eerder}.`);
+      problemen.push(`Regel ${regel}: de ${dienstWoord} op ${isoNaarInvoer(datum)} staat ook op regel ${eerder}.`);
       continue;
     }
     seenOn.set(slotId, regel);
@@ -224,7 +239,12 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
         continue;
       }
 
-      if (!automatic && nowLevel === target) continue;
+      if (nowLevel === target) {
+        // Nothing to change. A part-time, absence or fellow block the file only repeats as a plain word (the file is a
+        // little older than the block) would otherwise turn into a hand marking and stay when the absence is removed.
+        if (automatic) overgeslagen++;
+        continue;
+      }
       writes.push({ personId: id, slotId, level: target });
       wijzigingen.push({
         codenaam,
@@ -260,14 +280,18 @@ export function importPreferences(actorId: string, periodId: string, bestand: un
     };
   }
 
+  // The generation read the preferences when it began and only looks at status and version when it ends:
+  // preferences imported meanwhile would be left out of the roster without a word.
+  if (hasRunningJobForPeriod(periodId)) return { ok: false, status: 409, code: 'GENERATION_RUNNING', message: GENERATION_RUNNING_MESSAGE };
   let rows: string[][];
+  let regels: number[];
   try {
-    rows = readFirstSheet(Buffer.from(bestand, 'base64'));
+    ({ rijen: rows, regels } = readFirstSheetMetRegels(Buffer.from(bestand, 'base64')));
   } catch (error) {
     if (error instanceof XlsxError) return { ok: false, status: 400, code: 'NOT_XLSX', message: error.message };
     throw error;
   }
-  const { plan: result, writes } = plan(period, rows);
+  const { plan: result, writes } = plan(period, rows, regels);
   if (!toepassen) return { ok: true, plan: result, toegepast: false };
   if (result.problemen.length > 0) {
     return {

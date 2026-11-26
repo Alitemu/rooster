@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -206,7 +206,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       if (!stillExists) {
         const response: ApiErrorResponse = {
           success: false,
-          error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+          error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
         };
         return NextResponse.json(response, { status: 404 });
       }

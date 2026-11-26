@@ -1,5 +1,6 @@
 /**
- * PATCH /api/aios/periode/[id]/deadline { deadline } - move the AIOS's deadline (lib/aiosStatus.ts).
+ * PATCH /api/aios/periode/[id]/deadline { deadline, was } - move the AIOS's deadline (lib/aiosStatus.ts).
+ * `was` is the deadline the planner saw: moved by someone else meanwhile, the answer is 409.
  * The audit row is written there, with the change.
  */
 
@@ -19,7 +20,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (otherDienst) return otherDienst;
     const period = laadAiosPeriode(id);
     if (period instanceof NextResponse) return period;
-    const result = zetAiosDeadline(period, (await parseJsonBody<{ deadline: unknown }>(req)).deadline, auth!.userId);
+    const body = await parseJsonBody<{ deadline: unknown; was?: unknown }>(req);
+    const result = zetAiosDeadline(period, body.deadline, auth!.userId, new Date(), body.was);
     if (!result.ok) return aiosFout(result.status, result.code, result.message);
     return NextResponse.json({ success: true, data: { gewijzigd: true } });
   } catch (error) {

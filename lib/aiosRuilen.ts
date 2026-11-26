@@ -16,25 +16,37 @@
  *   inwerken included, L5); above 25% may (L4). Their own blocks by hand
  *   are theirs to give up. Not for a dienst that has been.
  *
+ * Only on a definitief roster: a voorlopig one is for checking, and the
+ * planner puts right what is wrong before anyone swaps. A request that can
+ * never go through any more (a dienst of it went to someone else, the
+ * planner changed the roster, the roster stopped being definitief) is
+ * INGETROKKEN: there is no status vervallen.
+ *
  * The AIOS's own copy of the achterwacht's swaps (app/api/person/.../
  * swap-requests, lib/swapLifecycle.ts), not a change to it
  * (docs/development/diensten.md, "Copied, not changed"): its own table,
  * statuses and words. Mail goes through the AIOS's flow after the commit,
- * not awaited and not queued (a request not mailed is still on their
- * page): a request anonymous by mail until it goes through, as there; then
- * the planner and the roosterbureau are told (RUIL_DOORGEVEN).
+ * not awaited, in a queue of its own when it can't go out
+ * (lib/aiosRuilMail.ts): a request anonymous by mail until it goes through,
+ * as there; then the Roosterbureau is told with the two who swapped and the
+ * Planner in the CC (RUIL_DOORGEVEN). A reminder after 6 to 7 days, or by
+ * hand, with a bericht to the requester that it was sent (lib/aiosRuilen.ts
+ * herinnerAiosRuil).
  */
 
 import { randomUUID } from 'crypto';
+import { aiosIsDefinitief } from '@/lib/aiosDefinitief';
 import { db } from '@/db/client';
-import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
-import { formatSwapDate } from '@/lib/aiosTeksten';
-import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
-import { aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import type { VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
+import { aiosPeriodeInOnderwerp, formatSwapDate } from '@/lib/aiosTeksten';
+import { aiosContactAdres, aiosMailIngesteld } from '@/lib/aiosMail';
+import { mailAiosRuil } from '@/lib/aiosRuilMail';
+import { type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { aiosSolverInvoer, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { nieuweOvertredingen, regelZin, type Regel } from '@/lib/aiosRegels';
 import { BLOK_VORM_LABELS, type BlokSoort, type BlokVorm } from '@/lib/aiosDiensten';
 import { writeAuditLog } from '@/lib/auditLog';
+import { localIsoDate } from '@/lib/localDate';
 
 export const RUIL_MAX_TOELICHTING = 200;
 
@@ -139,11 +151,8 @@ export function aiosEenheden(slots: readonly Slot[], rooster: ReadonlyMap<string
   return uit.sort((a, b) => a.van.localeCompare(b.van) || a.naam.localeCompare(b.naam));
 }
 
-/** Local calendar date, as the slots' dates are stored. */
-function vandaag(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+/** The ward's calendar date (lib/localDate.ts), as the slots' dates are stored. */
+const vandaag = (now: Date): string => localIsoDate(now);
 
 interface Stand {
   slots: Slot[];
@@ -209,7 +218,7 @@ export function aiosRuilKandidaten(period: AiosUitnodigPeriode, personId: string
   return opties.map((e) => ({ eenheid: uitgeschreven(e), collega: { id: e.houder, codenaam: naam.get(e.houder) ?? e.houder } }));
 }
 
-export type RuilStatus = 'IN_BEHANDELING' | 'GOEDGEKEURD' | 'AFGEWEZEN' | 'INGETROKKEN' | 'VERVALLEN';
+export type RuilStatus = 'IN_BEHANDELING' | 'GOEDGEKEURD' | 'AFGEWEZEN' | 'INGETROKKEN';
 
 interface RuilRij {
   id: string;
@@ -223,16 +232,40 @@ interface RuilRij {
   reden_afwijzing: string | null;
   aangemaakt_op: string;
   beantwoord_op: string | null;
+  gezien_op: string | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: HerinneringDoor | null;
 }
+
+export type HerinneringDoor = 'AUTOMATISCH' | 'AANVRAGER' | 'PLANNER';
 
 const lijstVan = (json: string) => JSON.parse(json) as string[];
 
+export const ROOSTER_AANGEPAST_REDEN = 'Het rooster is aangepast.';
+/** The publication was taken back: the roster did not change, it is voorlopig again. */
+export const ROOSTER_VOORLOPIG_REDEN = 'Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.';
+export const AL_GERUILD_REDEN = 'De dienst is al met een andere collega geruild.';
+export const AL_ONDERLING_GERUILD_REDEN = 'Jullie hebben die dienst intussen via een ander ruilverzoek al met elkaar geruild.';
+export const DERDE_REDEN = 'Een van de diensten is intussen al met iemand anders geruild.';
+
+export interface IngetrokkenRuil {
+  r: RuilRij;
+  reden: string;
+  /** The requester is told as well: not when they took part in the swap that closed it. */
+  aanvragerOok: boolean;
+}
+
 /**
  * Open requests that can never go through any more: one of their diensten
- * is with someone else now (a swap, the planner by hand). Closed as
- * vervallen, as the achterwacht's (lib/swapLifecycle.ts).
+ * is with someone else now (a swap, the planner by hand). Withdrawn
+ * (INGETROKKEN) with the reason; the caller mails them after its
+ * transaction (meldAiosRuilenIngetrokken).
  */
-export function sluitVervallenAiosRuilen(periodId: string, now = new Date()): number {
+export function trekOnmogelijkeAiosRuilenIn(
+  periodId: string,
+  now = new Date(),
+  kies: (r: RuilRij) => { reden: string; aanvragerOok: boolean } = () => ({ reden: ROOSTER_AANGEPAST_REDEN, aanvragerOok: true })
+): IngetrokkenRuil[] {
   const rooster = huidigRooster(periodId);
   const open = db.prepare(`SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = 'IN_BEHANDELING'`).all(periodId) as RuilRij[];
   const weg = open.filter(
@@ -240,17 +273,24 @@ export function sluitVervallenAiosRuilen(periodId: string, now = new Date()): nu
       lijstVan(r.aangeboden_json).some((id) => rooster.get(id) !== r.aanvrager_id) ||
       lijstVan(r.gevraagd_json).some((id) => rooster.get(id) !== r.respondent_id)
   );
-  const zet = db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'VERVALLEN', beantwoord_op = ? WHERE id = ? AND status = 'IN_BEHANDELING'`);
-  for (const r of weg) zet.run(now.toISOString(), r.id);
-  return weg.length;
+  return zetIngetrokken(weg, now, kies);
 }
 
-/** "Publicatie intrekken": nothing open can go through any more. */
-export function vervalOpenAiosRuilen(periodId: string, now = new Date()): void {
-  db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'VERVALLEN', beantwoord_op = ? WHERE period_id = ? AND status = 'IN_BEHANDELING'`).run(
-    now.toISOString(),
-    periodId
+/** The roster stops being definitief (the publication is taken back): nothing open can go through any more. */
+export function trekAlleOpenAiosRuilenIn(periodId: string, now = new Date()): IngetrokkenRuil[] {
+  const open = db.prepare(`SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = 'IN_BEHANDELING'`).all(periodId) as RuilRij[];
+  return zetIngetrokken(open, now, () => ({ reden: ROOSTER_VOORLOPIG_REDEN, aanvragerOok: true }));
+}
+
+function zetIngetrokken(rijen: RuilRij[], now: Date, kies: (r: RuilRij) => { reden: string; aanvragerOok: boolean }): IngetrokkenRuil[] {
+  const zet = db.prepare(
+    `UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN', beantwoord_op = ?, reden_afwijzing = ? WHERE id = ? AND status = 'IN_BEHANDELING'`
   );
+  return rijen.map((r) => {
+    const k = kies(r);
+    zet.run(now.toISOString(), k.reden, r.id);
+    return { r, ...k };
+  });
 }
 
 function beschrijf(ids: string[], slots: Map<string, Slot>): EenheidUit {
@@ -276,6 +316,10 @@ export interface RuilUit {
   reden_afwijzing: string | null;
   aangemaakt_op: string;
   beantwoord_op: string | null;
+  /** When the colleague opened their requests on their own page: the planner's "gelezen". */
+  gezien_op: string | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: HerinneringDoor | null;
 }
 
 function uitRijen(periodId: string, rijen: RuilRij[]): RuilUit[] {
@@ -292,6 +336,9 @@ function uitRijen(periodId: string, rijen: RuilRij[]): RuilUit[] {
     reden_afwijzing: r.reden_afwijzing,
     aangemaakt_op: r.aangemaakt_op,
     beantwoord_op: r.beantwoord_op,
+    gezien_op: r.gezien_op,
+    laatste_herinnering_op: r.laatste_herinnering_op,
+    laatste_herinnering_door: r.laatste_herinnering_door,
   }));
 }
 
@@ -299,17 +346,31 @@ function uitRijen(periodId: string, rijen: RuilRij[]): RuilUit[] {
 export function aiosRuilOverzicht(
   period: AiosUitnodigPeriode,
   personId: string,
-  now = new Date()
-): { eenheden: EenheidUit[]; uit: RuilUit[]; in: RuilUit[] } {
-  sluitVervallenAiosRuilen(period.id, now);
+  now = new Date(),
+  // False for a planner looking at the page on their behalf: that is not the AIOS reading their requests.
+  markeerGezien = true
+): { ruilen_kan: boolean; contact_planner: string | null; eenheden: EenheidUit[]; uit: RuilUit[]; in: RuilUit[] } {
+  meldAiosRuilenIngetrokken(period, trekOnmogelijkeAiosRuilenIn(period.id, now));
   const s = stand(period);
   const dag = vandaag(now);
+  // They opened their requests: what the planner reads as "gelezen".
+  if (markeerGezien) {
+    db.prepare(`UPDATE dienstrooster_aios_ruil SET gezien_op = ? WHERE period_id = ? AND respondent_id = ? AND gezien_op IS NULL`).run(
+      now.toISOString(),
+      period.id,
+      personId
+    );
+  }
   const rijen = db
     .prepare('SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND (aanvrager_id = ? OR respondent_id = ?) ORDER BY aangemaakt_op DESC')
     .all(period.id, personId, personId) as RuilRij[];
   const alle = uitRijen(period.id, rijen);
+  const kan = ruilenKan(period);
   return {
-    eenheden: s.eenheden.filter((e) => e.houder === personId && e.van >= dag).map(uitgeschreven),
+    // A voorlopig roster: the page says so, nothing can be swapped yet.
+    ruilen_kan: kan,
+    contact_planner: aiosContactAdres(),
+    eenheden: kan ? s.eenheden.filter((e) => e.houder === personId && e.van >= dag).map(uitgeschreven) : [],
     uit: alle.filter((_, i) => rijen[i].aanvrager_id === personId),
     in: alle.filter((_, i) => rijen[i].respondent_id === personId),
   };
@@ -317,47 +378,104 @@ export function aiosRuilOverzicht(
 
 /** The planner's view: every request of the period. */
 export function aiosRuilenVoorPlanner(period: AiosUitnodigPeriode, now = new Date()): RuilUit[] {
-  sluitVervallenAiosRuilen(period.id, now);
+  meldAiosRuilenIngetrokken(period, trekOnmogelijkeAiosRuilenIn(period.id, now));
   return uitRijen(
     period.id,
     db.prepare('SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? ORDER BY aangemaakt_op DESC').all(period.id) as RuilRij[]
   );
 }
 
-export type RuilUitkomst = { ok: true; id: string; mail: boolean } | { ok: false; status: number; code: string; message: string };
+export type RuilUitkomst =
+  | { ok: true; id: string; mail: boolean }
+  | { ok: false; status: number; code: string; message: string; laatste_herinnering_op?: string | null };
 
-const nee = (status: number, code: string, message: string): RuilUitkomst => ({ ok: false, status, code, message });
+const nee = (status: number, code: string, message: string, laatste?: string | null): RuilUitkomst => ({
+  ok: false,
+  status,
+  code,
+  message,
+  ...(laatste !== undefined ? { laatste_herinnering_op: laatste } : {}),
+});
 
-const GEPUBLICEERD = 'Ruilen kan als het rooster gepubliceerd is.';
+/** What a participant reads when the roster is still voorlopig. The planner's address is added on the page. */
+export const NOG_VOORLOPIG = 'Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner.';
+
+/** Swapping needs a published roster that is definitief. */
+export const ruilenKan = (period: AiosUitnodigPeriode): boolean => period.status === 'GEPUBLICEERD' && aiosIsDefinitief(period.id);
 
 // ---- mail -------------------------------------------------------------------
-
-const DOORGEVEN_AAN = ['Planner', 'Roosterbureau'] as const;
 
 const dienstTekst = (e: EenheidUit) =>
   e.van === e.tot ? `${e.naam.toLowerCase()} op ${formatSwapDate(e.van)}` : `${e.naam.toLowerCase()} van ${formatSwapDate(e.van)} tot en met ${formatSwapDate(e.tot)}`;
 
-function bericht(soort: VerzendlijstSoort, codenaam: string, onderwerp: string, tekst: string, anderen: string[] = []): VerzendlijstBericht {
-  return { soort, codenaam, personen: verzendlijstPersonen(codenaam, anderen), onderwerp, tekst };
+/** After the commit, not awaited: a mail that fails changes nothing about the swap. Whether the mail is set up is what the caller reports. */
+function stuur(
+  period: AiosUitnodigPeriode,
+  ruilId: string,
+  soort: VerzendlijstSoort,
+  aan: { personId: string } | { codenaam: string },
+  onderwerp: string,
+  tekst: string,
+  opties: { anderen?: string[]; cc?: string[] } = {}
+): boolean {
+  void mailAiosRuil({ periodId: period.id, ruilId, soort, aan, onderwerp, tekst, ...opties });
+  return aiosMailIngesteld();
 }
 
-function link(periodId: string, personId: string): string {
-  const basis = aiosMailBasisUrl(periodId);
-  return basis ? `\n\nJe pagina:\n${aiosPersoonlijkeLink(personId, periodId, basis)}\n\nDeze link is alleen voor jou. Stuur hem niet door.` : '';
-}
+/** What the Planner and the Roosterbureau are mailed about a swap that went through. */
+export const DOORGEVEN_AAN = 'Roosterbureau';
+export const DOORGEVEN_CC_PLANNER = 'Planner';
 
-/** After the commit, not awaited: a mail that fails changes nothing about the swap. */
-function stuur(period: AiosUitnodigPeriode, soort: VerzendlijstSoort, berichten: VerzendlijstBericht[]): boolean {
-  if (!aiosMailIngesteld()) return false;
-  void verstuurAiosVerzendlijst(buildVerzendlijst({ soort, automatisch: false, periode: period.naam }, berichten)).catch((error) =>
-    console.error('[aios-ruilen] mail failed', error)
-  );
-  return true;
+const slotMap = (periodId: string) => new Map(slotsVan(periodId).map((x) => [x.id, x]));
+
+/** Tells those involved their request is off, after the transaction that withdrew it. */
+export function meldAiosRuilenIngetrokken(period: AiosUitnodigPeriode, rijen: IngetrokkenRuil[]): void {
+  if (rijen.length === 0) return;
+  const naam = codenamen([...new Set(rijen.flatMap((x) => [x.r.aanvrager_id, x.r.respondent_id]))]);
+  const slots = slotMap(period.id);
+  for (const { r, reden, aanvragerOok } of rijen) {
+    const bied = dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots));
+    const vraag = dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots));
+    const collega = naam.get(r.respondent_id)!;
+    stuur(
+      period,
+      r.id,
+      'RUIL_INGETROKKEN',
+      { personId: r.respondent_id },
+      'Ruilverzoek ingetrokken',
+      `Beste ${collega},\n\nEen ruilverzoek aan jou is ingetrokken. ${reden} Je hoeft niets meer te doen. Je rooster blijft zoals het was.\n\nJij zou geven: ${vraag}\nJij zou krijgen: ${bied}`
+    );
+    if (aanvragerOok) {
+      const aanvrager = naam.get(r.aanvrager_id)!;
+      stuur(
+        period,
+        r.id,
+        'RUIL_UITKOMST',
+        { personId: r.aanvrager_id },
+        'Je ruilverzoek is ingetrokken',
+        `Beste ${aanvrager},\n\nJe ruilverzoek is ingetrokken. ${reden} Je rooster blijft zoals het was.\n\nJe bood aan: ${bied}\nJe vroeg: ${vraag}`
+      );
+    }
+  }
 }
 
 // ---- the steps --------------------------------------------------------------
 
 /** A request: one of the AIOS's own eenheden for an equal one of a colleague's. */
+/**
+ * How many swap requests one AIOS may start per 24 hours. A copy of the achterwacht's lib/swapQuota.ts, on the
+ * AIOS's own table: every request mails two people and a withdrawal a third, and one AIOS (or whoever has their
+ * link) asking every combination of equal diensten could use up the sending account's daily limit, after which
+ * invitations and reminders fail too. Withdrawn requests count: the limit survives withdraw-and-ask-again.
+ */
+export const MAX_AIOS_RUILVERZOEKEN_PER_DAG = 20;
+
+export function aiosRuilQuotumBereikt(personId: string, now = new Date()): boolean {
+  const sinds = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_ruil WHERE aanvrager_id = ? AND aangemaakt_op > ?').get(personId, sinds) as { n: number };
+  return n >= MAX_AIOS_RUILVERZOEKEN_PER_DAG;
+}
+
 export function vraagAiosRuilAan(
   period: AiosUitnodigPeriode,
   personId: string,
@@ -366,7 +484,7 @@ export function vraagAiosRuilAan(
   toelichtingIn: unknown,
   now = new Date()
 ): RuilUitkomst {
-  if (period.status !== 'GEPUBLICEERD') return nee(409, 'NOT_PUBLISHED', GEPUBLICEERD);
+  if (!ruilenKan(period)) return nee(409, 'NOT_DEFINITIEF', NOG_VOORLOPIG);
   if (typeof aangebodenId !== 'string' || typeof gevraagdId !== 'string') return nee(400, 'VALIDATION_ERROR', 'Kies wat je aanbiedt en wat je ervoor wilt.');
   if (toelichtingIn !== undefined && toelichtingIn !== null && typeof toelichtingIn !== 'string') {
     return nee(400, 'VALIDATION_ERROR', 'De toelichting moet tekst zijn.');
@@ -386,6 +504,9 @@ export function vraagAiosRuilAan(
     .prepare(`SELECT 1 FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = 'IN_BEHANDELING' AND aangeboden_json = ? AND gevraagd_json = ?`)
     .get(period.id, JSON.stringify(mijn.diensten), JSON.stringify(hun.diensten));
   if (bestaand) return nee(409, 'DUPLICATE', 'Dit ruilverzoek heb je al gedaan.');
+  if (aiosRuilQuotumBereikt(personId, now)) {
+    return nee(429, 'QUOTA', `Je hebt de afgelopen 24 uur al ${MAX_AIOS_RUILVERZOEKEN_PER_DAG} ruilverzoeken gedaan. Wacht tot morgen of vraag de planner om hulp.`);
+  }
 
   const id = randomUUID();
   db.transaction(() => {
@@ -401,23 +522,22 @@ export function vraagAiosRuilAan(
   const b = uitgeschreven(hun);
   const extra = toelichting ? `\n\nToelichting: ${toelichting}` : '';
   // Anonymous until it goes through: the colleague can say no without knowing to whom.
-  const mail =
-    stuur(period, 'RUILVERZOEK', [
-      bericht(
-        'RUILVERZOEK',
-        naam.get(hun.houder)!,
-        'Nieuw ruilverzoek AIOS',
-        `Beste ${naam.get(hun.houder)},\n\nEen collega vraagt je om te ruilen in het rooster van de AIOS voor ${period.naam}.\n\nJij geeft: ${dienstTekst(b)}\nJij krijgt: ${dienstTekst(a)}${extra}\n\nKeur het goed of wijs het af op je pagina.${link(period.id, hun.houder)}`
-      ),
-    ]) &&
-    stuur(period, 'RUIL_BEVESTIGING', [
-      bericht(
-        'RUIL_BEVESTIGING',
-        naam.get(personId)!,
-        'Je ruilverzoek is verstuurd',
-        `Beste ${naam.get(personId)},\n\nJe ruilverzoek is verstuurd.\n\nJij geeft: ${dienstTekst(a)}\nJij krijgt: ${dienstTekst(b)}\n\nJe krijgt bericht zodra je collega heeft gereageerd. Tot die tijd blijft je rooster zoals het is.${link(period.id, personId)}`
-      ),
-    ]);
+  const mail = stuur(
+    period,
+    id,
+    'RUILVERZOEK',
+    { personId: hun.houder },
+    'Nieuw ruilverzoek AIOS',
+    `Beste ${naam.get(hun.houder)},\n\nEen collega vraagt je om te ruilen in het rooster van de AIOS voor ${period.naam}.\n\nJij geeft: ${dienstTekst(b)}\nJij krijgt: ${dienstTekst(a)}${extra}\n\nKeur het goed of wijs het af op je pagina.`
+  );
+  stuur(
+    period,
+    id,
+    'RUIL_BEVESTIGING',
+    { personId },
+    'Je ruilverzoek is verstuurd',
+    `Beste ${naam.get(personId)},\n\nJe ruilverzoek is verstuurd.\n\nJij geeft: ${dienstTekst(a)}\nJij krijgt: ${dienstTekst(b)}\n\nJe krijgt bericht zodra je collega heeft gereageerd. Tot die tijd blijft je rooster zoals het is.`
+  );
   return { ok: true, id, mail };
 }
 
@@ -428,12 +548,12 @@ function laadRuil(periodId: string, ruilId: unknown): RuilRij | undefined {
 
 /** The colleague says yes: the diensten change hands, if they still can. */
 export function keurAiosRuilGoed(period: AiosUitnodigPeriode, personId: string, ruilId: unknown, now = new Date()): RuilUitkomst {
-  if (period.status !== 'GEPUBLICEERD') return nee(409, 'NOT_PUBLISHED', GEPUBLICEERD);
+  if (!ruilenKan(period)) return nee(409, 'NOT_DEFINITIEF', NOG_VOORLOPIG);
   const r = laadRuil(period.id, ruilId);
   if (!r || r.respondent_id !== personId) return nee(404, 'NOT_FOUND', 'Ruilverzoek niet gevonden.');
-  sluitVervallenAiosRuilen(period.id, now);
+  meldAiosRuilenIngetrokken(period, trekOnmogelijkeAiosRuilenIn(period.id, now));
   const nu = laadRuil(period.id, ruilId)!;
-  if (nu.status === 'VERVALLEN') return nee(409, 'LAPSED', 'Dit ruilverzoek is vervallen: een van de diensten is intussen bij iemand anders.');
+  if (nu.status === 'INGETROKKEN') return nee(409, 'WITHDRAWN', 'Dit ruilverzoek is ingetrokken.');
   if (nu.status !== 'IN_BEHANDELING') return nee(409, 'HANDLED', 'Dit ruilverzoek is al afgehandeld.');
   const s = stand(period);
   const aangeboden = lijstVan(r.aangeboden_json);
@@ -449,6 +569,8 @@ export function keurAiosRuilGoed(period: AiosUitnodigPeriode, personId: string, 
   if (regels.length > 0) return nee(409, 'HARD_RULE', `Deze ruil kan nu niet meer: ${regels.join(' ').replace(/\.$/, '')}. Wijs hem af.`);
 
   const op = now.toISOString();
+  const partijen = [r.aanvrager_id, r.respondent_id];
+  let gesloten: IngetrokkenRuil[] = [];
   db.transaction(() => {
     const zet = db.prepare(`UPDATE dienstrooster_assignment SET person_id = ?, bron = 'MANUAL' WHERE schedule_version_id = ? AND slot_id = ?`);
     const edit = db.prepare(
@@ -465,41 +587,60 @@ export function keurAiosRuilGoed(period: AiosUitnodigPeriode, personId: string, 
       edit.run(randomUUID(), period.id, id, period.id, r.aanvrager_id, id, r.respondent_id, personId, op);
     }
     const klaar = db
-      .prepare(`UPDATE dienstrooster_aios_ruil SET status = 'GOEDGEKEURD', beantwoord_op = ? WHERE id = ? AND status = 'IN_BEHANDELING'`)
-      .run(op, r.id);
+      .prepare(`UPDATE dienstrooster_aios_ruil SET status = 'GOEDGEKEURD', beantwoord_op = ?, gezien_op = COALESCE(gezien_op, ?) WHERE id = ? AND status = 'IN_BEHANDELING'`)
+      .run(op, op, r.id);
     if (klaar.changes !== 1) throw new Error('aios swap handled meanwhile');
     writeAuditLog({ actorId: personId, entiteit: 'aios_ruil', entiteitId: r.id, actie: 'APPROVE', oud: { status: 'IN_BEHANDELING' }, nieuw: { status: 'GOEDGEKEURD' } });
-    // Others asking for these diensten can never go through now.
-    sluitVervallenAiosRuilen(period.id, now);
+    // Others asking for these diensten can never go through now: withdrawn.
+    gesloten = trekOnmogelijkeAiosRuilenIn(period.id, now, (x) =>
+      partijen.includes(x.aanvrager_id)
+        ? { reden: partijen.includes(x.respondent_id) ? AL_ONDERLING_GERUILD_REDEN : AL_GERUILD_REDEN, aanvragerOok: false }
+        : { reden: DERDE_REDEN, aanvragerOok: true }
+    );
   })();
+  meldAiosRuilenIngetrokken(period, gesloten);
   const naam = codenamen([r.aanvrager_id, r.respondent_id]);
-  const slots = new Map(s.slots.map((x) => [x.id, x]));
+  const slots = slotMap(period.id);
   const ua = beschrijf(aangeboden, slots);
   const ub = beschrijf(gevraagd, slots);
   const aanvrager = naam.get(r.aanvrager_id)!;
   const collega = naam.get(r.respondent_id)!;
-  const mail =
-    stuur(period, 'RUIL_UITKOMST', [
-      bericht(
-        'RUIL_UITKOMST',
-        aanvrager,
-        'Je ruil is goedgekeurd',
-        `Beste ${aanvrager},\n\n${collega} heeft je ruil goedgekeurd. Je rooster is aangepast.\n\nJij gaf: ${dienstTekst(ua)}\nJij kreeg: ${dienstTekst(ub)}${link(period.id, r.aanvrager_id)}`,
-        [collega]
-      ),
-    ]) &&
-    stuur(
-      period,
-      'RUIL_DOORGEVEN',
-      // personen: the two who swapped, as the achterwacht's (lib/meldingMail.ts DoorgevenMail); no link.
-      DOORGEVEN_AAN.map((aan) => ({
-        soort: 'RUIL_DOORGEVEN' as const,
-        codenaam: aan,
-        personen: verzendlijstPersonen(aanvrager, [collega]),
-        onderwerp: `Ruil in het rooster van de AIOS ${period.naam}`,
-        tekst: `Twee AIOS hebben geruild in het rooster voor ${period.naam}.\n\n${collega} doet nu: ${dienstTekst(ua)}\n${aanvrager} doet nu: ${dienstTekst(ub)}`,
-      }))
-    );
+  const eigenIngetrokken = gesloten.filter((x) => x.r.aanvrager_id === r.aanvrager_id).length;
+  const ingetrokkenRegel =
+    eigenIngetrokken === 0
+      ? ''
+      : eigenIngetrokken === 1
+        ? '\n\nJe andere ruilverzoek voor deze dienst is ingetrokken.'
+        : `\n\nJe ${eigenIngetrokken} andere ruilverzoeken voor deze dienst zijn ingetrokken.`;
+  const mail = stuur(
+    period,
+    r.id,
+    'RUIL_UITKOMST',
+    { personId: r.aanvrager_id },
+    'Je ruil is goedgekeurd',
+    `Beste ${aanvrager},\n\n${collega} heeft je ruil goedgekeurd. Je rooster is aangepast.\n\nJij gaf: ${dienstTekst(ua)}\nJij kreeg: ${dienstTekst(ub)}${ingetrokkenRegel}\n\nHet Roosterbureau en de planner zijn hiervan op de hoogte gebracht.`,
+    { anderen: [collega] }
+  );
+  // The colleague who approved gets a confirmation as well.
+  stuur(
+    period,
+    r.id,
+    'RUIL_UITKOMST',
+    { personId: r.respondent_id },
+    'Je hebt een ruil goedgekeurd',
+    `Beste ${collega},\n\nJe hebt het ruilverzoek van ${aanvrager} goedgekeurd. Je rooster is aangepast.\n\nJij gaf: ${dienstTekst(ub)}\nJij kreeg: ${dienstTekst(ua)}\n\nHet Roosterbureau en de planner zijn hiervan op de hoogte gebracht.`,
+    { anderen: [aanvrager] }
+  );
+  // One bericht to the Roosterbureau, with the two who swapped and the Planner in the CC (the flow looks them up).
+  stuur(
+    period,
+    r.id,
+    'RUIL_DOORGEVEN',
+    { codenaam: DOORGEVEN_AAN },
+    `Ruil in het rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
+    `Twee AIOS hebben geruild in het rooster voor ${period.naam}.\n\n${collega} doet nu: ${dienstTekst(ua)}\n${aanvrager} doet nu: ${dienstTekst(ub)}`,
+    { anderen: [aanvrager, collega], cc: [aanvrager, collega, DOORGEVEN_CC_PLANNER] }
+  );
   return { ok: true, id: r.id, mail };
 }
 
@@ -511,20 +652,22 @@ export function wijsAiosRuilAf(period: AiosUitnodigPeriode, personId: string, ru
   if (r.status !== 'IN_BEHANDELING') return nee(409, 'HANDLED', 'Dit ruilverzoek is al afgehandeld.');
   const reden = typeof redenIn === 'string' && redenIn.trim() ? redenIn.trim().slice(0, RUIL_MAX_TOELICHTING) : null;
   db.transaction(() => {
-    db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'AFGEWEZEN', reden_afwijzing = ?, beantwoord_op = ? WHERE id = ?`).run(reden, now.toISOString(), r.id);
+    db.prepare(
+      `UPDATE dienstrooster_aios_ruil SET status = 'AFGEWEZEN', reden_afwijzing = ?, beantwoord_op = ?, gezien_op = COALESCE(gezien_op, ?) WHERE id = ?`
+    ).run(reden, now.toISOString(), now.toISOString(), r.id);
     writeAuditLog({ actorId: personId, entiteit: 'aios_ruil', entiteitId: r.id, actie: 'REJECT', oud: { status: 'IN_BEHANDELING' }, nieuw: { status: 'AFGEWEZEN' } });
   })();
   const naam = codenamen([r.aanvrager_id]);
-  const slots = new Map(slotsVan(period.id).map((x) => [x.id, x]));
+  const slots = slotMap(period.id);
   const aanvrager = naam.get(r.aanvrager_id)!;
-  const mail = stuur(period, 'RUIL_UITKOMST', [
-    bericht(
-      'RUIL_UITKOMST',
-      aanvrager,
-      'Je ruilverzoek is afgewezen',
-      `Beste ${aanvrager},\n\nJe ruilverzoek is afgewezen. Je rooster blijft zoals het was.\n\nJe bood aan: ${dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots))}\nJe vroeg: ${dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots))}${reden ? `\n\nReden: ${reden}` : ''}${link(period.id, r.aanvrager_id)}`
-    ),
-  ]);
+  const mail = stuur(
+    period,
+    r.id,
+    'RUIL_UITKOMST',
+    { personId: r.aanvrager_id },
+    'Je ruilverzoek is afgewezen',
+    `Beste ${aanvrager},\n\nJe ruilverzoek is afgewezen. Je rooster blijft zoals het was.\n\nJe bood aan: ${dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots))}\nJe vroeg: ${dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots))}${reden ? `\n\nReden: ${reden}` : ''}`
+  );
   return { ok: true, id: r.id, mail };
 }
 
@@ -538,15 +681,155 @@ export function trekAiosRuilIn(period: AiosUitnodigPeriode, personId: string, ru
     writeAuditLog({ actorId: personId, entiteit: 'aios_ruil', entiteitId: r.id, actie: 'CANCEL', oud: { status: 'IN_BEHANDELING' }, nieuw: { status: 'INGETROKKEN' } });
   })();
   const naam = codenamen([r.respondent_id]);
-  const slots = new Map(slotsVan(period.id).map((x) => [x.id, x]));
+  const slots = slotMap(period.id);
   const collega = naam.get(r.respondent_id)!;
-  const mail = stuur(period, 'RUIL_INGETROKKEN', [
-    bericht(
-      'RUIL_INGETROKKEN',
-      collega,
-      'Ruilverzoek ingetrokken',
-      `Beste ${collega},\n\nEen ruilverzoek aan jou is ingetrokken. Je hoeft niets te doen. Je rooster blijft zoals het was.\n\nJij zou geven: ${dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots))}\nJij zou krijgen: ${dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots))}${link(period.id, r.respondent_id)}`
-    ),
-  ]);
+  const mail = stuur(
+    period,
+    r.id,
+    'RUIL_INGETROKKEN',
+    { personId: r.respondent_id },
+    'Ruilverzoek ingetrokken',
+    `Beste ${collega},\n\nEen ruilverzoek aan jou is ingetrokken. Je hoeft niets te doen. Je rooster blijft zoals het was.\n\nJij zou geven: ${dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots))}\nJij zou krijgen: ${dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots))}`
+  );
   return { ok: true, id: r.id, mail };
+}
+
+// ---- reminders --------------------------------------------------------------
+
+const UUR_MS = 60 * 60 * 1000;
+const DAG_MS = 24 * UUR_MS;
+/** The hour of day (server-local) an automatic reminder goes out. */
+const HERINNERING_UUR = 9;
+/** After this many days open (rounded down to 09:00) the colleague is reminded once, automatically. */
+export const HERINNERING_NA_DAGEN = 7;
+/** By hand not more often than this: the colleague is not to be pestered. */
+export const HERINNERING_MIN_TUSSENTIJD_MS = DAG_MS;
+
+/**
+ * The last 09:00 (server-local) at or before the request is 7 x 24 hours
+ * old: a request made on a Friday afternoon is reminded the next Friday
+ * morning, never on the Saturday.
+ */
+export function aiosRuilHerinneringMoment(aangemaaktOp: string): Date {
+  const rijp = new Date(Date.parse(aangemaaktOp) + HERINNERING_NA_DAGEN * DAG_MS);
+  const moment = new Date(rijp);
+  moment.setHours(HERINNERING_UUR, 0, 0, 0);
+  if (moment > rijp) moment.setDate(moment.getDate() - 1);
+  return moment;
+}
+
+const DOOR_TEKST: Record<HerinneringDoor, string> = {
+  AUTOMATISCH: 'Je verzoek stond al bijna 7 dagen open. Daarom is er automatisch een herinnering gestuurd.',
+  AANVRAGER: 'Je hebt zelf een herinnering gestuurd.',
+  PLANNER: 'De planner heeft een herinnering gestuurd.',
+};
+
+/** Reminds the colleague of an open request and tells the requester it was done. After the commit: mails only. */
+function stuurHerinnering(period: AiosUitnodigPeriode, r: RuilRij, door: HerinneringDoor): boolean {
+  const naam = codenamen([r.aanvrager_id, r.respondent_id]);
+  const slots = slotMap(period.id);
+  const a = dienstTekst(beschrijf(lijstVan(r.aangeboden_json), slots));
+  const b = dienstTekst(beschrijf(lijstVan(r.gevraagd_json), slots));
+  const extra = r.toelichting ? `\n\nToelichting: ${r.toelichting}` : '';
+  const collega = naam.get(r.respondent_id)!;
+  const aanvrager = naam.get(r.aanvrager_id)!;
+  // Anonymous, like the request itself.
+  const mail = stuur(
+    period,
+    r.id,
+    'RUIL_HERINNERING',
+    { personId: r.respondent_id },
+    'Herinnering: een ruilverzoek wacht op jouw antwoord',
+    `Beste ${collega},\n\nEen collega wacht nog op je antwoord op een ruilverzoek in het rooster van de AIOS voor ${period.naam}.\n\nJij geeft: ${b}\nJij krijgt: ${a}${extra}\n\nKeur het goed of wijs het af op je pagina.`
+  );
+  stuur(
+    period,
+    r.id,
+    'RUIL_HERINNERING_BEVESTIGING',
+    { personId: r.aanvrager_id },
+    'Er is een herinnering gestuurd voor je ruilverzoek',
+    `Beste ${aanvrager},\n\nEr is een herinnering gestuurd naar je collega voor je ruilverzoek. ${DOOR_TEKST[door]}\n\nJij geeft: ${a}\nJij krijgt: ${b}\n\nOverweeg de dienst ook te ruilen met een andere dag of collega. Je mag meer dan één verzoek tegelijk doen. Zodra iemand de ruil accepteert, wordt het andere verzoek automatisch ingetrokken.`
+  );
+  return mail;
+}
+
+function dienstenGeweest(r: RuilRij, now: Date): boolean {
+  const dag = vandaag(now);
+  const datum = new Map(slotsVan(r.period_id).map((x) => [x.id, x.datum]));
+  return [...lijstVan(r.aangeboden_json), ...lijstVan(r.gevraagd_json)].some((id) => (datum.get(id) ?? '') < dag);
+}
+
+/**
+ * A reminder by hand, for the requester or the planner: only after the
+ * yes of whoever presses (`bevestigd`), which says when the last one went;
+ * not within 24 hours of the last. The planner's own access is checked by
+ * the route.
+ */
+export function herinnerAiosRuil(
+  period: AiosUitnodigPeriode,
+  ruilId: unknown,
+  door: 'AANVRAGER' | 'PLANNER',
+  actorId: string,
+  bevestigd: boolean,
+  now = new Date()
+): RuilUitkomst {
+  if (!ruilenKan(period)) return nee(409, 'NOT_DEFINITIEF', NOG_VOORLOPIG);
+  const r = laadRuil(period.id, ruilId);
+  if (!r || (door === 'AANVRAGER' && r.aanvrager_id !== actorId)) return nee(404, 'NOT_FOUND', 'Ruilverzoek niet gevonden.');
+  if (r.status !== 'IN_BEHANDELING') return nee(409, 'HANDLED', 'Dit ruilverzoek is al afgehandeld. Er is geen herinnering meer nodig.');
+  if (dienstenGeweest(r, now)) return nee(409, 'IN_PAST', 'Een van de diensten is al geweest. Er is geen herinnering meer nodig.');
+  if (r.laatste_herinnering_op && now.getTime() - Date.parse(r.laatste_herinnering_op) < HERINNERING_MIN_TUSSENTIJD_MS) {
+    return nee(409, 'TOO_SOON', 'Er is de afgelopen 24 uur al een herinnering gestuurd. Probeer het later opnieuw.', r.laatste_herinnering_op);
+  }
+  if (!bevestigd) {
+    return nee(409, 'BEVESTIGING', 'Bevestig dat je een herinnering wilt sturen.', r.laatste_herinnering_op);
+  }
+  db.transaction(() => {
+    db.prepare(`UPDATE dienstrooster_aios_ruil SET laatste_herinnering_op = ?, laatste_herinnering_door = ? WHERE id = ? AND status = 'IN_BEHANDELING'`).run(
+      now.toISOString(),
+      door,
+      r.id
+    );
+    writeAuditLog({
+      actorId,
+      entiteit: 'aios_ruil',
+      entiteitId: r.id,
+      actie: 'UPDATE',
+      oud: { laatste_herinnering_op: r.laatste_herinnering_op },
+      nieuw: { herinnering: door, laatste_herinnering_op: now.toISOString() },
+    });
+  })();
+  return { ok: true, id: r.id, mail: stuurHerinnering(period, r, door) };
+}
+
+/**
+ * The automatic reminders: every open request on a definitief roster that
+ * has been open 7 x 24 hours (rounded down to 09:00) and has not been
+ * reminded yet, by anyone (the claim below says which are open and not
+ * reminded). Run by the hourly check. Returns how many.
+ */
+export function stuurAutomatischeAiosRuilHerinneringen(now = new Date()): number {
+  const rijen = db
+    .prepare(
+      `SELECT r.* FROM dienstrooster_aios_ruil r
+       JOIN dienstrooster_schedule_period p ON p.id = r.period_id
+       WHERE p.status = 'GEPUBLICEERD' AND p.definitief_op IS NOT NULL AND p.verwijderd_op IS NULL`
+    )
+    .all() as RuilRij[];
+  let aantal = 0;
+  for (const r of rijen) {
+    if (now < aiosRuilHerinneringMoment(r.aangemaakt_op) || dienstenGeweest(r, now)) continue;
+    const periode = db
+      .prepare('SELECT id, naam, pool_id, start_datum, eind_datum, status FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(r.period_id) as AiosUitnodigPeriode;
+    // The claim is the guard: only an open request nobody has reminded yet, one at a time.
+    const geclaimd = db
+      .prepare(`UPDATE dienstrooster_aios_ruil SET laatste_herinnering_op = ?, laatste_herinnering_door = 'AUTOMATISCH' WHERE id = ? AND laatste_herinnering_op IS NULL AND status = 'IN_BEHANDELING'`)
+      .run(now.toISOString(), r.id).changes;
+    if (geclaimd !== 1) continue;
+    writeAuditLog({ actorId: r.aanvrager_id, entiteit: 'aios_ruil', entiteitId: r.id, actie: 'UPDATE', nieuw: { herinnering: 'AUTOMATISCH' } });
+    stuurHerinnering(periode, r, 'AUTOMATISCH');
+    aantal++;
+  }
+  return aantal;
 }

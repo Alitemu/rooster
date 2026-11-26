@@ -113,7 +113,7 @@ export const absence = sqliteTable(
     van_datum: text('van_datum').notNull(), // ISO date
     tot_datum: text('tot_datum').notNull(), // ISO date
     soort: text('soort', {
-      enum: ['VAKANTIE', 'CONGRES', 'OVERIG'],
+      enum: ['VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG'],
     }).notNull(),
     notitie: text('notitie'), // Optional, no sensitive data allowed
     aangemaakt_door: text('aangemaakt_door').notNull().references(() => person.id),
@@ -603,6 +603,8 @@ export const availability = sqliteTable(
   },
   (table) => ({
     uniq: uniqueIndex('availability_uniq').on(table.person_id, table.slot_id),
+    // The unique one starts with the person: what a slot has marked on it was a scan (0.111.0).
+    slotIdx: index('availability_slot_idx').on(table.slot_id),
   })
 );
 
@@ -690,7 +692,7 @@ export const aiosBlokkeuze = sqliteTable(
 
 /**
  * The solver's fair share per AIOS of a quarter it made (aios-solver
- * per_aios: doel_punten, doel_feestdagdiensten), the years before included
+ * per_aios: doel_punten, doel_feestdagdiensten and per soort), the years before included
  * (lib/aiosSaldo.ts): the next quarter's saldo is this minus what the AIOS
  * did, as the roster is then. Written with the roster, gone with it.
  */
@@ -702,9 +704,78 @@ export const aiosDoel = sqliteTable(
     person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
     doel_punten: real('doel_punten').notNull(),
     doel_feestdagen: real('doel_feestdagen').notNull(),
+    // The fair number of nights of this quarter, the saldo before included (0.107.0). NULL for a quarter made
+    // before: its nights saldo is unknown and counts as none, or all its nights would read as too many.
+    doel_nachten: real('doel_nachten'),
+    // The same for the dagdiensten and the avonddiensten in the weekend (0.108.0); NULL for a quarter made before.
+    doel_dagen: real('doel_dagen'),
+    doel_weekendavonden: real('doel_weekendavonden'),
+    // The avonddiensten in the week and the uitloopdiensten (0.903.0), for the fair range in Dienstdoende; these carry
+    // no saldo. NULL for a quarter made before: it shows no range for them.
+    doel_weekavonden: real('doel_weekavonden'),
+    doel_uitloopdiensten: real('doel_uitloopdiensten'),
   },
   (table) => ({
     uniq: uniqueIndex('aios_doel_uniq').on(table.period_id, table.person_id),
+  })
+);
+
+/**
+ * What the last generation of an AIOS quarter told the planner: how many
+ * diensten it filled, and which stayed empty and why (lib/aiosGenereren.ts).
+ * Kept with the roster, so the planner still sees it after a refresh or
+ * another login; written with the roster, gone with it.
+ */
+export const aiosGeneratie = sqliteTable('dienstrooster_aios_generatie', {
+  period_id: text('period_id').primaryKey().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+  gemaakt_op: text('gemaakt_op').notNull(),
+  solver_status: text('solver_status').notNull(),
+  gevuld: integer('gevuld').notNull(),
+  tijd_seconden: real('tijd_seconden').notNull(),
+  leeg_json: text('leeg_json').notNull(), // [{ dienst_id, datum, code, redenen }]
+});
+
+/**
+ * The deelnamefactor (the AIOS's fte) of each person as it was when the
+ * period's roster was made (lib/deelnamefactor.ts, lib/aiosFteVast.ts). The
+ * factor follows from the part-time days a person gives, which change from
+ * one period to the next (1,0 now, 0,8 the next): what a made roster, its
+ * publication check, the carry-over and the dienstpercentage count with is
+ * what they counted with when it was made. Replaced by a new generation,
+ * removed with the roster; cascades with the period and the person.
+ */
+export const periodFactor = sqliteTable(
+  'dienstrooster_period_factor',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    factor: real('factor').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('period_factor_uniq').on(table.period_id, table.person_id),
+  })
+);
+
+/**
+ * Why an AIOS marks a day geblokkeerd or liever niet, in their own words
+ * and optional (lib/aiosReden.ts). Private: only the AIOS's planner sees it,
+ * in the diensten of a roster being corrected by hand and in the
+ * voorkeurenoverzicht; never in a swap request or to another AIOS.
+ * One per AIOS and day; it counts only while that day has such a mark.
+ */
+export const aiosReden = sqliteTable(
+  'dienstrooster_aios_reden',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    datum: text('datum').notNull(), // YYYY-MM-DD
+    tekst: text('tekst').notNull(),
+    gewijzigd_op: text('gewijzigd_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_reden_uniq').on(table.period_id, table.person_id, table.datum),
   })
 );
 
@@ -753,11 +824,17 @@ export const aiosRuil = sqliteTable(
     respondent_id: text('respondent_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
     aangeboden_json: text('aangeboden_json').notNull(),
     gevraagd_json: text('gevraagd_json').notNull(),
+    // VERVALLEN is no longer written: what lapsed is INGETROKKEN (0.102.0).
+    // The value stays allowed so a database from before still opens.
     status: text('status', { enum: ['IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'] }).notNull(),
     toelichting: text('toelichting'),
     reden_afwijzing: text('reden_afwijzing'),
     aangemaakt_op: text('aangemaakt_op').notNull(),
     beantwoord_op: text('beantwoord_op'),
+    // When the colleague opened their requests on their own page ("gelezen" for the planner).
+    gezien_op: text('gezien_op'),
+    laatste_herinnering_op: text('laatste_herinnering_op'),
+    laatste_herinnering_door: text('laatste_herinnering_door'),
   },
   (table) => ({
     periode: index('aios_ruil_periode_idx').on(table.period_id),
@@ -819,6 +896,9 @@ export const assignment = sqliteTable(
   },
   (table) => ({
     uniq: uniqueIndex('assignment_uniq').on(table.schedule_version_id, table.slot_id),
+    // The unique one starts with the period: who has a slot, and what a person has, were scans (0.111.0).
+    slotIdx: index('assignment_slot_idx').on(table.slot_id),
+    personIdx: index('assignment_person_idx').on(table.person_id),
   })
 );
 
@@ -849,6 +929,10 @@ export const swapRequest = sqliteTable(
     // overview can show whether it has been read. Null for requests made
     // before this column existed.
     melding_id: text('melding_id'),
+    // The last reminder to the colleague, and who sent it: AUTOMATISCH,
+    // AANVRAGER or PLANNER. Null: none yet (lib/ruilHerinnering.ts).
+    laatste_herinnering_op: text('laatste_herinnering_op'),
+    laatste_herinnering_door: text('laatste_herinnering_door'),
     row_version: integer('row_version').default(1).notNull(),
   },
   (table) => ({
@@ -946,6 +1030,17 @@ export const appSetting = sqliteTable('dienstrooster_app_setting', {
  * only built when it actually goes out. Dropped after 7 days, or earlier
  * once the swap it is about has moved on.
  */
+export const aiosMailQueue = sqliteTable('dienstrooster_aios_mail_queue', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+  ruil_id: text('ruil_id'),
+  soort: text('soort').notNull(),
+  melding_json: text('melding_json').notNull(),
+  pogingen: integer('pogingen').default(0).notNull(),
+  laatste_poging_op: text('laatste_poging_op'),
+  aangemaakt_op: text('aangemaakt_op').notNull(),
+});
+
 export const mailQueue = sqliteTable('dienstrooster_mail_queue', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   period_id: text('period_id').notNull().references(() => schedulePeriod.id),

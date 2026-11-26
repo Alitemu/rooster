@@ -17,7 +17,7 @@ a test and a mutation can hold each one:
   2. blocks whole, every dienst one AIOS;
   3. one dienst a day;
   4. on a part-time day no uitloopdienst and no avondblok with that day in it;
-  5. a fulltimer never in the nachtblok zo t/m di;
+  5. from 0,9 fte on never in the nachtblok zo t/m di (kalender.py);
   6. inwerken: only uitloopdiensten and the weekend's dagdiensten;
   7. no dienst on a compensation day (kalender.py), 8. moved off a feestdag;
   9. rest: 14 hours, 46 after a night block of three or four nights, at most
@@ -36,6 +36,8 @@ dagdiensten, voorkeur.
 from __future__ import annotations
 
 import math
+import threading
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -50,7 +52,15 @@ W_LEEG = 1_000_000  # per dienst left empty
 W_BOVEN_HELFT = 20_000  # per blocked option taken from the part above half
 W_PUNT = 100  # per tenth of a point off the share, per AIOS
 W_PUNT_MAX = 200  # per tenth of a point of the largest such difference
-W_SOORT = {'NACHT': 300, 'AVOND': 200, 'DAG': 100}  # per dienst off the share of that soort; nights weigh most (H2)
+# Per dienst off the share of that soort. The planner's order of what must be shared fairly, most important first
+# (0.103.0): nights, dagdiensten, evenings at the weekend, evenings in the week, uitloopdiensten. Counted apart from the
+# points: a night is a point like a dagdienst, and an uitloopdienst (0,2) used to make up for a night someone did not
+# do (the measurement of October 2026: 1 to 8 nights between 20 AIOS, one with 3 nights and 16 uitloopdiensten).
+W_SOORT = {'NACHT': 1500, 'DAG': 600, 'AVOND_WEEKEND': 300, 'AVOND': 200, 'UITLOOP': 100}
+# The soort that fairness counts per code: the evening at the weekend (ADW) is its own, not the evening in the week.
+EERLIJK_VAN_CODE = {'ND': 'NACHT', 'DD': 'DAG', 'ADW': 'AVOND_WEEKEND', 'AD': 'AVOND', 'UD': 'UITLOOP'}
+# Who inwerkt does evenings and nights only after the inwerkperiode: their share of these is pro rata (the others: all werkdagen).
+NA_INWERKEN = ('NACHT', 'AVOND_WEEKEND', 'AVOND')
 W_FEESTDAG = 300  # per feestdagdienst off the share over the years
 W_LIEVER_NIET = 500
 W_SPREIDING = 400  # per block more than one in four weeks, and again per block more than one in two
@@ -79,6 +89,11 @@ class Slot:
     @property
     def soort(self) -> str:
         return SOORT_VAN_CODE[self.code]
+
+    @property
+    def eerlijk_soort(self) -> str:
+        """What fairness shares equally: nights, dagdiensten, evenings at the weekend, evenings in the week, uitloopdiensten."""
+        return EERLIJK_VAN_CODE[self.code]
 
 
 @dataclass
@@ -136,6 +151,14 @@ class Aios:
     erboven: dict[str, int]
     saldo_tienden: int  # delta: < 0 = fewer points this quarter
     feestdag_achterstand: float  # > 0: had fewer feestdagen than fair so far
+    # Nights short of the fair number so far (0.107.0); a delta as the points: < 0 = fewer nights this quarter.
+    saldo_nachten: float = 0.0
+    # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
+    saldo_dagen: float = 0.0
+    saldo_weekendavonden: float = 0.0
+    # What the AIOS did in the last days of the quarter before (0.111.0): their rest and compensation days run on.
+    eerder: list[Slot] = field(default_factory=list)
+    eerdere_opties: list['Optie'] = field(default_factory=list)
 
 
 def _groep(soort: str, vorm: str, slots: list[Slot]) -> Optional[str]:
@@ -185,6 +208,25 @@ def opties_maken(slots: list[Slot], blok_vorm: dict[str, tuple[str, str]], feest
         o.groep = _groep(o.soort, o.vorm, o.slots)
         o.compensatie = kalender.compensatiedagen(o.soort, o.vorm, o.eerste, o.laatste, feestdagen)
     return opties
+
+
+def eerdere_opties(slots: list[Slot], blok_vorm: dict[str, tuple[str, str]], feestdagen: set[date]) -> list[Optie]:
+    """
+    What an AIOS did in the quarter before, as options: their rest and compensation days are checked against what
+    they are given now. Built as the quarter's own are, and the 4-blocks and the two dagdiensten kept whole (their
+    parts left out), as the check (controle.py) reads them.
+    """
+    if not slots:
+        return []
+    gedaan = {s.id for s in slots}
+    alles = [o for o in opties_maken(slots, blok_vorm, feestdagen) if all(s.id in gedaan for s in o.slots)]
+    gekozen: list[Optie] = []
+    gebruikt: set[str] = set()
+    for o in sorted(alles, key=lambda o: -len(o.slots)):
+        if gebruikt.isdisjoint(s.id for s in o.slots):
+            gekozen.append(o)
+            gebruikt.update(s.id for s in o.slots)
+    return gekozen
 
 
 # ---------------------------------------------------------------------------
@@ -251,8 +293,8 @@ def regel_4_parttime(a: Aios, o: Optie) -> Optional[str]:
 
 
 def regel_5_fulltime(a: Aios, o: Optie) -> Optional[str]:
-    """Hard rule 5: the nachtblok zo t/m di is for part-timers (F7)."""
-    if a.fte >= 1 and o.soort == 'NACHT' and o.vorm == 'ZO_DI':
+    """Hard rule 5: the nachtblok zo t/m di is for who has less than 0,9 fte (F7)."""
+    if a.fte >= kalender.GEEN_NACHTBLOK_VANAF_FTE and o.soort == 'NACHT' and o.vorm == 'ZO_DI':
         return 'FULLTIME_NACHTBLOK'
     return None
 
@@ -268,6 +310,13 @@ def regel_6_inwerken(a: Aios, o: Optie) -> Optional[str]:
     return None
 
 
+def regel_7_9_kwartaalgrens(a: Aios, o: Optie) -> Optional[str]:
+    """Hard rules 7, 8 and 9 over the quarter boundary: the rest and the compensation days of what they did before."""
+    if any(botsen(p, o) for p in a.eerdere_opties):
+        return 'KWARTAALGRENS'
+    return None
+
+
 REGELS_PER_OPTIE = [
     regel_wens,
     regel_1_beschikbaar,
@@ -276,6 +325,7 @@ REGELS_PER_OPTIE = [
     regel_4_parttime,
     regel_5_fulltime,
     regel_6_inwerken,
+    regel_7_9_kwartaalgrens,
 ]
 
 
@@ -370,6 +420,23 @@ class Uitkomst:
     objectief: float
 
 
+class Stop:
+    """
+    A way to end a running solve from another thread, when the caller has hung up (main.py): the search
+    stops as soon as it can instead of running to the end of its time. Safe to ask repeatedly.
+    """
+
+    def __init__(self) -> None:
+        self.verzocht = threading.Event()
+        self.solver: Optional[cp_model.CpSolver] = None
+
+    def vraag(self) -> None:
+        self.verzocht.set()
+        huidig = self.solver
+        if huidig is not None:
+            huidig.StopSearch()
+
+
 def oplossen(
     slots: list[Slot],
     blok_vorm: dict[str, tuple[str, str]],
@@ -380,7 +447,9 @@ def oplossen(
     tijdslimiet: float = 60.0,
     seed: int = 0,
     workers: int = 0,
+    stop: Optional[Stop] = None,
 ) -> Uitkomst:
+    begin = time.monotonic()
     opties = opties_maken(slots, blok_vorm, feestdagen)
     m = cp_model.CpModel()
 
@@ -462,18 +531,25 @@ def oplossen(
     totaal_tienden = sum(s.tienden for s in slots)
     doel = {k: v + next(a.saldo_tienden for a in aios if a.id == k) for k, v in aandeel(totaal_tienden, capaciteit).items()}
     doel_soort: dict[str, dict[str, float]] = {a.id: {} for a in aios}
-    for soort in ('NACHT', 'AVOND', 'DAG'):
-        n = sum(1 for s in slots if s.soort == soort)
-        if soort in ('NACHT', 'AVOND'):
+    for soort in W_SOORT:
+        n = sum(1 for s in slots if s.eerlijk_soort == soort)
+        if soort in NA_INWERKEN:
             # Who inwerkt has evenings and nights only after it (pro rata).
             gew = {a.id: a.fte * werkdagen(a, van, tot, feestdagen, na=a.inwerken[1] if a.inwerken else None) for a in aios}
         else:
             gew = capaciteit
         for k, v in aandeel(n, gew).items():
             doel_soort[k][soort] = v
+        if soort in ('NACHT', 'DAG', 'AVOND_WEEKEND'):
+            # Who had fewer of this soort than fair before gets more now, who had more gets fewer. Not held at
+            # none: a target below none is the debt, which the next quarter needs to see (the objective below
+            # measures |count - target|, which for a count of none or more has the same slope either way).
+            for a in aios:
+                saldo = {'NACHT': a.saldo_nachten, 'DAG': a.saldo_dagen, 'AVOND_WEEKEND': a.saldo_weekendavonden}[soort]
+                doel_soort[a.id][soort] = doel_soort[a.id][soort] + saldo
     n_feest = sum(1 for s in slots if s.feestdag)
     doel_feest = {
-        k: max(0.0, v + next(a.feestdag_achterstand for a in aios if a.id == k)) for k, v in aandeel(n_feest, capaciteit).items()
+        k: v + next(a.feestdag_achterstand for a in aios if a.id == k) for k, v in aandeel(n_feest, capaciteit).items()
     }
 
     # ---- objective ----
@@ -481,30 +557,33 @@ def oplossen(
     for s in slots:
         termen.append(W_LEEG * (1 - gevuld[s.id]))
 
-    max_af = m.NewIntVar(0, max(1, totaal_tienden * 2), 'max_af')
+    # The carry-over moves a target by its own size: a bound of the quarter's points alone made a large saldo
+    # an impossible model instead of a large difference.
+    max_af = m.NewIntVar(0, max(1, max(abs(round(doel[a.id])) for a in aios) + totaal_tienden * 2), 'max_af')
     for a in aios:
         eigen = toegestaan[a.id]
         xs = [(o, x[a.id, o.id]) for o in eigen]
         punten = sum(o.tienden * v for o, v in xs)
-        af = m.NewIntVar(0, max(1, totaal_tienden * 2), f'af_{a.id}')
         d = round(doel[a.id])
+        af = m.NewIntVar(0, max(1, abs(d) + totaal_tienden * 2), f'af_{a.id}')
         m.Add(af >= punten - d)
         m.Add(af >= d - punten)
         m.Add(max_af >= af)
         termen.append(W_PUNT * af)
         for soort, w in W_SOORT.items():
-            aantal = sum(sum(1 for t in o.slots if t.soort == soort) * v for o, v in xs)
-            afs = m.NewIntVar(0, len(slots), f'afs_{a.id}_{soort}')
-            ds = round(doel_soort[a.id][soort])
+            # In hundredths of a dienst: a share of 0,48 is not none, or who had too many and who is level look alike.
+            aantal = 100 * sum(sum(1 for t in o.slots if t.eerlijk_soort == soort) * v for o, v in xs)
+            afs = m.NewIntVar(0, 100 * len(slots) + abs(round(100 * doel_soort[a.id][soort])), f'afs_{a.id}_{soort}')
+            ds = round(100 * doel_soort[a.id][soort])
             m.Add(afs >= aantal - ds)
             m.Add(afs >= ds - aantal)
-            termen.append(w * afs)
+            termen.append((w // 100) * afs)
         feest = sum(sum(1 for t in o.slots if t.feestdag) * v for o, v in xs)
-        aff = m.NewIntVar(0, len(slots), f'aff_{a.id}')
-        df = round(doel_feest[a.id])
-        m.Add(aff >= feest - df)
-        m.Add(aff >= df - feest)
-        termen.append(W_FEESTDAG * aff)
+        aff = m.NewIntVar(0, 100 * len(slots) + abs(round(100 * doel_feest[a.id])), f'aff_{a.id}')
+        df = round(100 * doel_feest[a.id])
+        m.Add(aff >= 100 * feest - df)
+        m.Add(aff >= df - 100 * feest)
+        termen.append((W_FEESTDAG // 100) * aff)
         for o, v in xs:
             niveaus = {a.markeringen.get(s.id, ('', ''))[0] for s in o.slots}
             if boven_helft(a, o):
@@ -530,8 +609,20 @@ def oplossen(
     termen.append(W_PUNT_MAX * max_af)
     m.Minimize(sum(termen))
 
+    # The empty roster is a roster: a first solution always exists, so a short time or a large quarter ends
+    # in the best found, not in "no solution" (and an empty dienst is told as empty, not as ruled out).
+    for var in x.values():
+        m.AddHint(var, 0)
+    for var in gevuld.values():
+        m.AddHint(var, 0)
+
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(tijdslimiet)
+    # The time limit is for the whole job: what building the model took is not left over for the search.
+    solver.parameters.max_time_in_seconds = max(1.0, float(tijdslimiet) - (time.monotonic() - begin))
+    if stop is not None:
+        stop.solver = solver
+        if stop.verzocht.is_set():
+            solver.parameters.max_time_in_seconds = 0.0
     if workers:
         solver.parameters.num_workers = workers  # otherwise CP-SAT's own choice: every core, as the achterwacht's
     solver.parameters.random_seed = seed

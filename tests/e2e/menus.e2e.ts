@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl, openOnderdeel } from './setup';
 
 /**
  * Every pick-from-a-menu control closes once the pick is done.
@@ -32,7 +32,7 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
       const calendarTab = page.getByRole('button', { name: /Voorkeuren/ }).first();
       if (await calendarTab.count()) await calendarTab.click();
 
-      const cell = page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').first();
+      const cell = page.locator('button[title*="Tik of klik voor"]:not([disabled])').first();
       await expect(cell).toBeVisible();
       await cell.click({ button: 'right' });
       const menu = page.getByRole('menu');
@@ -56,7 +56,7 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
       await loginAsPlanner(page);
       await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
       await page.waitForLoadState('networkidle');
-      await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+      await openOnderdeel(page, 'Dienstrooster');
       await expect(page.getByRole('button', { name: /Wisselen/ }).first()).toBeVisible();
     };
 

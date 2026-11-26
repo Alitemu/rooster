@@ -14,6 +14,7 @@
 import { db } from '@/db/client';
 import { resolveRulesetConfig, resolveWindowWeeks, computeBandStatusByPerson, type Teller } from '@/lib/rosterBands';
 import { getWindowConflictingPersonIds } from '@/lib/windowRule';
+import type { WindowWeeksConfig } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
 import { coversDate, isMemberOnDate, membershipWindows, notMemberMessage } from './membershipWindow';
 
@@ -81,6 +82,8 @@ export interface UnfilledSlot {
   assigned_count: number;
   shortfall: number;
   eligible_people: EligiblePerson[];
+  /** The period's windows, for the browser to check picks of one round against each other (lib/vooraf.ts). */
+  venster: WindowWeeksConfig;
 }
 
 interface SlotPreference {
@@ -393,6 +396,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
+      venster: windowWeeks,
       eligible_people: members.filter((p) => coversDate(windows.get(p.id), slot.datum)).map((p) => {
         const status = bandStatus.get(p.id)?.[teller];
         return {

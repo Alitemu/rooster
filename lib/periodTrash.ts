@@ -19,7 +19,9 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/db/client';
+import fs from 'fs';
+import path from 'path';
+import { db, dbFilePath } from '@/db/client';
 import { overlapMessage, overlappingPeriod } from './periodOverlap';
 import { isAiosPool } from './aiosPeriod';
 
@@ -151,6 +153,8 @@ function cascadeDeletePeriod(periodId: string): void {
   db.prepare('DELETE FROM dienstrooster_reminder_run WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_period_fellow WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_mail_queue WHERE period_id = ?').run(periodId);
+  // The AIOS's own queue holds a foreign key on the period without a cascade, as the achterwacht's above.
+  db.prepare('DELETE FROM dienstrooster_aios_mail_queue WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_period_excluded_day WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
@@ -162,6 +166,28 @@ function cascadeDeletePeriod(periodId: string): void {
 
   // The period itself, last.
   db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+}
+
+/**
+ * The back-up CSVs of a period's preferences (lib/preferencesBackup.ts, lib/aiosVoorkeurBackup.ts) live outside the
+ * database, one per person and period, with the period's id in the name. Purging the period left them for ever:
+ * codenames, the period's name and every mark. Run after the transaction has committed, so a purge that fails keeps them.
+ * The folders are spelled out here, as the sweep of the prullenbak serves both diensten.
+ */
+function ruimBackupsOp(periodIds: string[]): void {
+  const map = path.join(path.dirname(dbFilePath), 'backups');
+  for (const sub of ['preferences', 'aios-voorkeuren']) {
+    const dir = path.join(map, sub);
+    let namen: string[];
+    try {
+      namen = fs.readdirSync(dir);
+    } catch {
+      continue; // no back-ups made yet
+    }
+    for (const naam of namen) {
+      if (periodIds.some((id) => naam.includes(`__${id}__`))) fs.rmSync(path.join(dir, naam), { force: true });
+    }
+  }
 }
 
 /**
@@ -180,21 +206,28 @@ export function purgePeriodNow(periodId: string, actorId: string): void {
     logAudit(actorId, periodId, 'DELETE', { naam: period.naam, status: period.status }, { type: 'PERMANENT_PURGE' });
   });
   run();
+  ruimBackupsOp([periodId]);
 }
 
 /**
  * Sweeps the trash for anything past its retention window and purges it.
  * Called lazily from the periods-list and trash-list routes rather than
  * on a schedule - there is no cron/scheduler service in this deployment.
+ *
+ * Per dienst (0.106.0): a planner who opens their list purges their own
+ * dienst's expired periods, not the other's, and the audit row names them
+ * for what is theirs. `dienst` null is the beheerder, who sees both.
  */
-export function purgeExpiredPeriods(actorId: string): { purged: number } {
+export function purgeExpiredPeriods(actorId: string, dienst: string | null = null): { purged: number } {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const expired = db
     .prepare(
-      'SELECT id, naam, status FROM dienstrooster_schedule_period WHERE verwijderd_op IS NOT NULL AND verwijderd_op <= ?'
+      `SELECT sp.id, sp.naam, sp.status FROM dienstrooster_schedule_period sp
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+       WHERE sp.verwijderd_op IS NOT NULL AND sp.verwijderd_op <= @cutoff AND (@dienst IS NULL OR pl.type = @dienst)`
     )
-    .all(cutoff) as Array<{ id: string; naam: string; status: string }>;
+    .all({ cutoff, dienst }) as Array<{ id: string; naam: string; status: string }>;
 
   if (expired.length === 0) return { purged: 0 };
 
@@ -205,6 +238,7 @@ export function purgeExpiredPeriods(actorId: string): { purged: number } {
     }
   });
   run();
+  ruimBackupsOp(expired.map((p) => p.id));
 
   return { purged: expired.length };
 }

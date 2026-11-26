@@ -3,8 +3,8 @@
  * (dienstrooster_app_setting): the mail account the verzendlijst goes out
  * from (lib/verzendlijstMail.ts), because once the app runs on a ward
  * server, the person running it may not be able to edit files there. The
- * flow mailbox is also the planner's address in the swap dialog
- * (getSwapContacts).
+ * planner's address in the swap dialog and on a voorlopig roster is a
+ * contact address of its own (getContactPlanner), not the flow's mailbox.
  *
  * The app password is stored encrypted (lib/settingsCrypto.ts) and never
  * sent back to the browser.
@@ -17,6 +17,7 @@ const GEBRUIKER = 'mail.gebruiker';
 const WACHTWOORD = 'mail.wachtwoord';
 const AAN = 'mail.verzendlijst_aan';
 const LAATSTE_FOUT = 'mail.laatste_fout';
+const CONTACT = 'mail.contact_planner';
 
 /**
  * The last time sending failed, kept until a send succeeds again (or the
@@ -114,5 +115,29 @@ export function deleteMailSettings(): boolean {
  * ward's own address, and the repository is public.
  */
 export function getSwapContacts(): { planner: string | null } {
-  return { planner: get(AAN) ?? null };
+  return { planner: getContactPlanner() };
+}
+
+/**
+ * The address participants mail when something is wrong in a voorlopig
+ * roster or a swap can't go through the app: the planner's own, set by the
+ * beheerder apart from the flow's mailbox (which the flow reads, not a
+ * person). The AIOS has one of its own (lib/aiosMail.ts aiosContactAdres).
+ */
+export function getContactPlanner(): string | null {
+  return get(CONTACT) ?? null;
+}
+
+/** Saves (or with an empty value removes) the planner's contact address. */
+export function saveContactPlanner(adres: string, actorId: string): void {
+  if (adres === '') {
+    db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(CONTACT);
+    return;
+  }
+  db.prepare(
+    `INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(sleutel) DO UPDATE SET waarde = excluded.waarde, gewijzigd_op = excluded.gewijzigd_op,
+       gewijzigd_door = excluded.gewijzigd_door`
+  ).run(CONTACT, adres, new Date().toISOString(), actorId);
 }

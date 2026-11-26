@@ -85,7 +85,7 @@ describe('/api/planner/period/[id]/auto-reminders', () => {
     expect((await res.json()).data.aan).toBe(false);
 
     // Mail "configured" (never actually reached: nothing is due for a paused period).
-    saveMailSettings({ gebruiker: 'x@gmail.com', wachtwoord: 'y', verzendlijstAan: 'z@example.test' }, null);
+    saveMailSettings({ gebruiker: 'x_test@gmail.com', wachtwoord: 'y', verzendlijstAan: 'z@example.test' }, null);
     await runAutoReminders(reminderMoment(new Date('2099-03-11T17:00'), 7), { onlyPeriodIds: [f.periodId] });
     const runs = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_reminder_run WHERE period_id = ?').get(f.periodId) as {
       n: number;

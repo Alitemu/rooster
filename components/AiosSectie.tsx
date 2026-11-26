@@ -10,9 +10,29 @@
  * Unlike the achterwacht's, the title is a heading with a button in it (the
  * pattern for an accordion), so a screen reader and the tests find both the
  * heading and what opens it. The hint and the pin sit next to the heading.
+ *
+ * The new layout (1.13.0, lib/aiosIndeling.ts): under an AiosIndeling the page shows one section at a time,
+ * chosen in the list. Every section says its title and hint to the list itself (`meld`), wherever it is
+ * on the page, so the list holds what is there and nothing else. The participant's page has no
+ * AiosIndeling and folds as it did.
  */
 
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { AiosOnderdeel } from '@/lib/aiosIndeling';
+
+/** What a section says to the list of the new layout. */
+export interface AiosMelding {
+  titel: string;
+  hint?: string;
+}
+
+/** The new layout, for the sections under it (components/AiosPeriodOverview.tsx). */
+export interface AiosIndelingWaarde {
+  actief: AiosOnderdeel;
+  meld: (sleutel: AiosOnderdeel, melding: AiosMelding | null) => void;
+}
+
+export const AiosIndelingContext = createContext<AiosIndelingWaarde | null>(null);
 
 interface Harmonica {
   open: ReadonlySet<string>;
@@ -61,6 +81,7 @@ export function AiosSectie({
   hint,
   testId,
   blijfGeladen = false,
+  printOpen = false,
   children,
 }: {
   sleutel: string;
@@ -68,11 +89,41 @@ export function AiosSectie({
   hint?: string;
   testId?: string;
   blijfGeladen?: boolean;
+  /** On paper the body is there although the section is closed (a roster to print, 0.111.0). */
+  printOpen?: boolean;
   children: ReactNode;
 }) {
   const harmonica = useContext(HarmonicaContext)!;
+  const indeling = useContext(AiosIndelingContext);
+  // In the new layout: tell the list this section is there, with its title and hint, and that it left.
+  const meld = indeling?.meld;
+  useEffect(() => {
+    if (!meld) return;
+    meld(sleutel as AiosOnderdeel, { titel, hint });
+    return () => meld(sleutel as AiosOnderdeel, null);
+  }, [meld, sleutel, titel, hint]);
+
+  if (indeling) {
+    const actief = indeling.actief === sleutel;
+    if (!actief && !blijfGeladen) return null;
+    // A section whose state must survive (blijfGeladen) stays on the page unseen while another is chosen, as it does
+    // closed in the accordion: in the same element, only hidden, so React keeps what is in it (2.0.1: a different
+    // element for the two cases threw away the unsaved choices about the feestdag blocks on the way to "Periode").
+    // scroll-mt: under the blue bar, which sticks to the top below 1100 px. The title takes the focus after a choice.
+    return (
+      <div hidden={!actief} className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={testId} data-onderdeel={actief ? sleutel : undefined}>
+        <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
+          {titel}
+        </h2>
+        {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
+        <div className="mt-4 space-y-3">{children}</div>
+      </div>
+    );
+  }
+
   const isOpen = harmonica.open.has(sleutel);
   const vast = harmonica.vast.has(sleutel);
+  const bodyBestaat = isOpen || blijfGeladen || printOpen;
   const bodyId = `aios-sectie-${sleutel}`;
   return (
     <div className="card overflow-hidden" data-testid={testId}>
@@ -82,7 +133,7 @@ export function AiosSectie({
       >
         <h2 className="font-bold text-neutral-900">
           {/* The click bubbles to the row, which opens and closes it. */}
-          <button type="button" aria-expanded={isOpen} aria-controls={bodyId} className="flex items-center gap-2 text-left">
+          <button type="button" aria-expanded={isOpen} aria-controls={bodyBestaat ? bodyId : undefined} className="flex items-center gap-2 text-left">
             <svg
               className={`w-4 h-4 text-neutral-500 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
               viewBox="0 0 20 20"
@@ -108,11 +159,13 @@ export function AiosSectie({
                 harmonica.zetVast(sleutel);
               }}
               title={vast ? 'Losmaken: klapt dicht zodra je een andere sectie opent' : 'Vastzetten: blijft open, ook als je een andere sectie opent'}
+              aria-label="Vastzetten"
               aria-pressed={vast}
-              className={`px-1.5 py-1 rounded transition-colors ${vast ? 'text-red-600 hover:text-red-800' : 'text-neutral-300 hover:text-neutral-500'}`}
+              className={`p-2.5 rounded transition-colors ${vast ? 'text-red-600 hover:text-red-800' : 'text-neutral-500 hover:text-neutral-700'}`}
             >
-              {/* An SVG in currentColor, not 📌: an emoji keeps its own colour, so pinned would look like unpinned. */}
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              {/* An SVG in currentColor, not 📌: an emoji keeps its own colour, so pinned would look like unpinned.
+                  Pinned is filled, not pinned is an outline: not by colour alone. */}
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill={vast ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <circle cx="10" cy="7" r="4" />
                 <rect x="9" y="10" width="2" height="7" rx="1" />
               </svg>
@@ -120,8 +173,8 @@ export function AiosSectie({
           )}
         </span>
       </div>
-      {(isOpen || blijfGeladen) && (
-        <div id={bodyId} className={isOpen ? 'border-t border-neutral-100 p-4 space-y-3' : 'hidden'}>
+      {bodyBestaat && (
+        <div id={bodyId} className={isOpen ? 'border-t border-neutral-100 p-4 space-y-3' : printOpen ? 'hidden print:block border-t border-neutral-100 p-4 space-y-3' : 'hidden'}>
           {children}
         </div>
       )}

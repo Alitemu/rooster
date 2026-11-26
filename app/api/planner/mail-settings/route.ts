@@ -9,7 +9,11 @@
  * Saving and removing are for the beheerder only: the settings are shared by
  * the achterwacht and the AIOS (the planner's choice), and a planner who
  * could point the flow mailbox elsewhere would receive the other dienst's
- * personal links (lib/dienstAccess.ts). Every planner sees the status.
+ * personal links (lib/dienstAccess.ts). Every planner of the achterwacht sees
+ * the status; the AIOS has its own (app/api/aios/mail-instellingen), and its
+ * planner gets a 404 here, as the achterwacht's planner does there.
+ * The settings are the achterwacht's flow address and contact address; only
+ * the Gmail account is shared.
  *
  * lib/appSettings.ts, lib/verzendlijstMail.ts. Changes are audit-logged,
  * without the password.
@@ -22,10 +26,11 @@ import { getAuthContextFromRequest, requireAdminAccess, requirePlannerAccess } f
 import { unauthorizedResponse, forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { deleteMailSettings, getStoredMailSettings, saveMailSettings } from '@/lib/appSettings';
 import { mailConfigStatus, verifyMailLogin } from '@/lib/verzendlijstMail';
-import { flushMailQueue } from '@/lib/meldingMail';
+import { flushMailQueue, mailWachtrijItems } from '@/lib/meldingMail';
+import { eigenDienstDenial } from '@/lib/dienstAccess';
 
 const ALLEEN_BEHEERDER =
-  'Alleen de beheerder kan de mailinstellingen wijzigen. Ze gelden voor de achterwacht en de AIOS samen.';
+  'Alleen de beheerder kan de mailinstellingen wijzigen. Het Gmail-account geldt voor de achterwacht en de AIOS samen.';
 
 const fail = (status: number, message: string) =>
   NextResponse.json({ success: false, error: { code: 'INVALID_INPUT', message } }, { status });
@@ -39,8 +44,12 @@ function audit(actorId: string, oud: unknown, nieuw: unknown, actie: 'UPDATE' | 
 
 export async function GET(req: NextRequest) {
   try {
-    if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
-    return NextResponse.json({ success: true, data: mailConfigStatus() });
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    const andereDienst = eigenDienstDenial(auth!, 'ACHTERWACHT');
+    if (andereDienst) return andereDienst;
+    // What waits (kind, for whom, since when) is the beheerder's to see; a planner sees the number.
+    return NextResponse.json({ success: true, data: { ...mailConfigStatus(), wachtrij_items: requireAdminAccess(auth) ? mailWachtrijItems() : [] } });
   } catch (error) {
     return internalErrorResponse('mail-settings-get', error);
   }

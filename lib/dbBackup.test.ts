@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { runDailyDatabaseBackup, BACKUPS_KEPT } from './dbBackup';
+import { dbFilePath } from '@/db/client';
 
 /**
  * The rule: every day there is a complete, readable copy of the database,
@@ -50,5 +51,23 @@ describe('daily database backup', () => {
     expect(left).toContain('eigen-kopie.db');
     expect(left).not.toContain('rooster-2027-01-01.db');
     expect(left).toContain(`rooster-2027-01-${String(BACKUPS_KEPT + 3).padStart(2, '0')}.db`);
+  });
+
+  it('removes a half-written copy of an earlier day, which is as large as the database', () => {
+    const dir = tempDir();
+    fs.writeFileSync(path.join(dir, 'rooster-2026-01-01.db.bezig'), 'half');
+    runDailyDatabaseBackup(new Date(2026, 4, 2), dir);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith('.bezig'))).toEqual([]);
+    expect(fs.existsSync(path.join(dir, 'rooster-2026-05-02.db'))).toBe(true);
+  });
+
+  it('makes no copy when the disk has room for less than two of them, and tries again later', () => {
+    const dir = tempDir();
+    const grootte = fs.statSync(dbFilePath).size;
+    const geen = runDailyDatabaseBackup(new Date(2026, 4, 3), dir, () => 2 * grootte - 1);
+    expect(geen).toBeNull();
+    expect(fs.readdirSync(dir)).toEqual([]);
+    // With room for exactly two it goes.
+    expect(runDailyDatabaseBackup(new Date(2026, 4, 3), dir, () => 2 * grootte)).toBe(path.join(dir, 'rooster-2026-05-03.db'));
   });
 });

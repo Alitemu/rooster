@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Props {
   personId: string;
@@ -60,7 +61,7 @@ export function FellowToggle({ personId, periodId, onChanged }: Props) {
       onChanged?.();
     } catch (err) {
       setFellow(!next);
-      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.');
+      setError(foutTekst(err, 'Opslaan is mislukt.'));
     } finally {
       setSaving(false);
     }

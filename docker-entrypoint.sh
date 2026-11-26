@@ -17,7 +17,8 @@ set -e
 # `node` via su-exec, never as root.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /data
-  chown -R node:node /data
+  # -h: a link the app user left in /data is re-owned itself, not what it points at.
+  chown -R -h node:node /data
   exec su-exec node "$0" "$@"
 fi
 
@@ -50,4 +51,6 @@ if [ -n "$SEED_PLANNER_PASSWORD" ]; then
   npx tsx scripts/claim-password.ts admin || echo "admin password claim failed - continuing startup."
 fi
 
-exec npm start
+# Next itself, not `npm start`: npm stays in between as a parent that does not pass SIGTERM on, so
+# `docker stop` ended npm and left the server to be killed without finishing its requests.
+exec node_modules/.bin/next start

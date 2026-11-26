@@ -225,4 +225,34 @@ describe('GET /api/exports/audit-trail/[period-id]', () => {
     const text = await exportText(periodId, planner);
     expect(text).toContain('Geblokkeerde dag overschreven');
   });
+  it('lists an assignment changed twice (a wissel and its Ongedaan maken) once per change, not once per audit entry', async () => {
+    const poolId = createPool();
+    const typeId = createShiftType(poolId);
+    const periodId = createPeriod(poolId, 'Dubbel', '2027-01-04', '2027-01-10');
+    const slotId = createSlot(periodId, typeId, '2027-01-06');
+    const planner = createPerson('PLANNER');
+    const a = createPerson();
+    const b = createPerson();
+    const assignmentId = crypto.randomUUID();
+    const edit = (personId: string, type: string, op: string) =>
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment_edit
+           (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)`
+      ).run(crypto.randomUUID(), assignmentId, periodId, personId, slotId, type, planner, op);
+    const audit = (actie: string, op: string) =>
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, 'assignment', ?, ?, NULL, '{}', ?)`
+      ).run(crypto.randomUUID(), planner, assignmentId, actie, op);
+    // The wissel: b on the shift; then Ongedaan maken puts a back. Two audit entries of the same assignment.
+    edit(b, 'HANDMATIG_TOEWIJZEN', '2026-11-08T14:39:41.960Z');
+    audit('UPDATE', '2026-11-08T14:39:41.961Z');
+    edit(a, 'HANDMATIG_TOEWIJZEN', '2026-11-08T14:39:45.816Z');
+    audit('UPDATE', '2026-11-08T14:39:45.817Z');
+
+    const text = await exportText(periodId, planner);
+    const regels = text.split('\n').filter((r) => r.includes('Toegewezen'));
+    expect(regels).toHaveLength(2);
+  });
 });

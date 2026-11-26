@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * The planner's screens at phone width (CLAUDE.md: readable at 375px), the
@@ -43,6 +43,8 @@ test.describe('at 375px', () => {
   test('the period page with "Rooster verwijderen" open does not scroll sideways', async ({ page }) => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    // The period's header and its buttons are in the section "Periode" (1.12.0).
+    await openOnderdeel(page, 'Periode');
     await page.getByRole('button', { name: /Rooster verwijderen/ }).click();
     await expect(page.getByTestId('rooster-verwijderen')).toBeVisible();
     expect(await overflow(page)).toBeLessThanOrEqual(1);
@@ -66,6 +68,6 @@ test.describe('in the Netherlands, just after midnight', () => {
     await page.clock.setFixedTime(new Date('2026-10-13T22:30:00Z'));
     await page.goto(`${getBaseUrl()}/planner/pool/${pools[0]}/staff`);
     await expect(page.getByText('Nieuw personeelslid toevoegen')).toBeVisible();
-    await expect(page.locator('input[type="date"]').nth(0)).toHaveValue('2026-10-14');
+    await expect(page.locator('input[data-datumveld]').nth(0)).toHaveValue('14-10-2026');
   });
 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, openSecties } from './setup';
 
 /**
  * One shift may be offered to several colleagues at once: whoever approves
@@ -30,6 +30,7 @@ test.describe('Eén dienst aan meerdere collega’s aanbieden', () => {
     };
 
     await page.goto(getPersonalLinkUrl(user.token));
+    await openSecties(page);
     await page.waitForLoadState('networkidle');
     await openDialog();
     await expect(page.getByText(/Je kunt dezelfde dienst aan meerdere collega/)).toBeVisible();

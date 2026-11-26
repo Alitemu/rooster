@@ -198,6 +198,27 @@ describe('GET /api/periods/[id]', () => {
     expect(body.data.bevroren_ruleset_json).toBe(FROZEN_RULESET);
     expect(body.data.row_version).toBeDefined();
   });
+
+  // Rooster instellen starts a concept from the previous period's settings (lib/vorigeInstellingen.ts).
+  it('gives the planner a concept\'s previous settings, and none for a period already opened', async () => {
+    const planner = createPerson('PLANNER');
+    const pool = createPool();
+    const vorige = createPeriod(pool);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET naam = 'Vorige', bevroren_ruleset_json = ? WHERE id = ?`).run(
+      JSON.stringify({ distributionMode: 'NAAR_RATO', windowWeeks: 3 }),
+      vorige
+    );
+    const concept = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op)
+       VALUES (?, ?, 'Nieuw', '2027-02-01', '2027-02-14', '2099-01-01T00:00:00Z', 'CONCEPT', datetime('now'))`
+    ).run(concept, pool);
+    createdPeriodIds.push(concept);
+
+    const body = await (await get(concept, planner, 'staff')).json();
+    expect(body.data.vorige_instellingen).toMatchObject({ periode_naam: 'Vorige', distributionMode: 'NAAR_RATO', windowWeeksAvond: 3 });
+    expect((await (await get(vorige, planner, 'staff')).json()).data.vorige_instellingen).toBeNull();
+  });
 });
 
 /**

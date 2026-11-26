@@ -88,12 +88,20 @@ afterEach(() => {
     db.prepare('DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?').run(f.periodId);
     db.prepare('DELETE FROM dienstrooster_pending_undo WHERE scope_id = ?').run(f.periodId);
     db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(f.periodId);
+    db.prepare('DELETE FROM dienstrooster_availability WHERE slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)').run(f.periodId);
     db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(f.periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(f.periodId);
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE pool_id = ?').run(f.poolId);
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(f.poolId);
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(f.poolId);
     db.prepare('DELETE FROM dienstrooster_ruleset WHERE id = ?').run(f.rulesetId);
-    for (const id of f.personIds) db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(id);
+    db.prepare('DELETE FROM dienstrooster_period_factor WHERE period_id = ?').run(f.periodId);
+    for (const id of f.personIds) {
+      db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_absence WHERE person_id = ? OR aangemaakt_door = ?').run(id, id);
+      db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(id);
+    }
   }
 });
 
@@ -123,6 +131,42 @@ describe('POST /api/periods/[id]/reopen', () => {
     expect((await res.json()).error.message).toContain('publicatie in');
     expect(status(f)).toBe('GEPUBLICEERD');
     expect(bronnen(f)).toEqual(['SOLVER']);
+  });
+
+  it('wipes the frozen factors, which the next generation freezes again', async () => {
+    const f = createFixture('GEGENEREERD');
+    db.prepare('INSERT INTO dienstrooster_period_factor (id, period_id, person_id, factor) VALUES (?, ?, ?, 0.5)').run(
+      crypto.randomUUID(),
+      f.periodId,
+      f.personIds[1]
+    );
+    expect((await reopen(f, f.personIds[0])).status).toBe(200);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_period_factor WHERE period_id = ?').get(f.periodId)).toEqual({ n: 0 });
+  });
+
+  it('blocks the days of an absence entered while the period was closed', async () => {
+    const f = createFixture('GESLOTEN');
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, '2020-01-01', '2099-12-31')`
+    ).run(crypto.randomUUID(), f.personIds[1], f.poolId);
+    db.prepare(
+      `INSERT INTO dienstrooster_absence (id, person_id, van_datum, tot_datum, soort, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, '2027-01-04', '2027-01-05', 'VAKANTIE', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), f.personIds[1], f.personIds[0]);
+    const blokken = () =>
+      db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_availability WHERE person_id = ? AND source = 'ABSENCE'`).get(f.personIds[1]);
+    expect(blokken()).toEqual({ n: 0 });
+    expect((await reopen(f, f.personIds[0])).status).toBe(200);
+    expect(blokken()).toEqual({ n: 2 });
+  });
+
+  it('refuses a period that has started (409) and leaves it as it was', async () => {
+    const f = createFixture('GESLOTEN');
+    db.prepare(`UPDATE dienstrooster_schedule_period SET start_datum = '2020-01-06', eind_datum = '2020-01-12' WHERE id = ?`).run(f.periodId);
+    const res = await reopen(f, f.personIds[0]);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toContain('al begonnen');
+    expect(status(f)).toBe('GESLOTEN');
   });
 
   it('is for planners only', async () => {

@@ -9,6 +9,8 @@ import { runAutoReminders } from '@/lib/autoReminders';
 import { reminderMoment } from '@/lib/aiosAutoHerinneringen';
 import { linkAanvraagKandidaten } from '@/lib/linkAanvraag';
 import { purgePeriodNow, softDeletePeriod } from '@/lib/periodTrash';
+import { zetAiosDeadline } from '@/lib/aiosStatus';
+import { aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, waitForMails, type SmtpSink } from '@/tests/smtpSink';
 import { POST as achterwachtOpen } from '../periods/[id]/open/route';
 import { POST as achterwachtAfwezigheid } from '../person/[id]/absences/route';
@@ -286,6 +288,7 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect(res.status, await res.clone().text()).toBe(200);
     await waitForMails(sink, 1);
     expect(sink.received[0].to).toEqual([AAN_AIOS]);
+    expect(verzendlijstPayload(sink.received[0].raw).dienst).toBe('AIOS');
     const bericht = verzendlijstPayload(sink.received[0].raw).berichten.find((b) => b.codenaam === aios.codenaam)!;
     expect(bericht.tekst).toMatch(/Het rooster van de AIOS voor/);
     expect(bericht.tekst).toMatch(/\/aios\/[A-Za-z0-9_-]+/);
@@ -308,6 +311,22 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect((await opnieuw.json()).data.aantal).toBe(1);
   });
 
+  it.each([
+    ['herinneringen', herinneringen, { opnieuw: true }],
+    ['uitnodigingen', uitnodigingen, {}],
+  ] as const)('sends %s once when two clicks arrive together, the second is told to wait', async (naam, route, body) => {
+    const voor = sink.received.length;
+    const [a, b] = await Promise.all([bij(route, naam, 'POST', body), bij(route, naam, 'POST', body)]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const geweigerd = a.status === 409 ? a : b;
+    expect((await geweigerd.json()).error.code).toBe('BEZIG');
+    await waitForMails(sink, voor + 1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(sink.received.length).toBe(voor + 1);
+    // The claim is given back: a click afterwards works again.
+    expect((await bij(route, naam, 'POST', body)).status).toBe(200);
+  });
+
   it('downloads the links to the AIOS page', async () => {
     const res = await bij(links, 'links', 'POST');
     expect(res.status).toBe(200);
@@ -327,6 +346,7 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect(res.status, await res.clone().text()).toBe(200);
     await waitForMails(sink, 1);
     expect(sink.received[0].to).toEqual([AAN_AIOS]);
+    expect(verzendlijstPayload(sink.received[0].raw).dienst).toBe('AIOS');
     const lijst = JSON.stringify(verzendlijstPayload(sink.received[0].raw));
     expect(lijst).toContain(aios.codenaam);
     expect(lijst).not.toContain(staf.xCodenaam);
@@ -365,6 +385,23 @@ describe('"Status voorkeuren" and the steps after opening', () => {
     expect((await bij(deadline, 'deadline', 'PATCH', { deadline: '2097-02-13T17:00' })).status).toBe(400);
     expect((await bij(heropenen, 'heropenen', 'POST')).status).toBe(200);
     expect(rij(aios.period)).toMatchObject({ status: 'OPEN', auto_herinneren: 0 });
+  });
+
+  it('refuses a deadline someone else moved in the meantime: the planner keeps what the beheerder set', async () => {
+    const gezien = rij(aios.period).deadline;
+    expect((await bij(deadline, 'deadline', 'PATCH', { deadline: '2097-02-11T17:00', was: gezien }, aios.admin)).status).toBe(200);
+    // The planner still has the old deadline on screen.
+    const laat = await bij(deadline, 'deadline', 'PATCH', { deadline: '2097-02-10T17:00', was: gezien });
+    expect(laat.status).toBe(409);
+    expect((await laat.json()).error).toMatchObject({ code: 'DEADLINE_CONFLICT', message: expect.stringMatching(/^De deadline is intussen door iemand anders aangepast/) });
+    expect(rij(aios.period).deadline).toBe('2097-02-11T17:00');
+    // Changed between reading and writing: the write itself checks it.
+    const verouderd = { ...aiosUitnodigPeriode(aios.period)!, deadline: gezien };
+    expect(zetAiosDeadline(verouderd, '2097-02-09T17:00', aios.planner, new Date(), gezien)).toMatchObject({ ok: false, status: 409 });
+    expect(rij(aios.period).deadline).toBe('2097-02-11T17:00');
+    // With the deadline as it is now, it goes.
+    expect((await bij(deadline, 'deadline', 'PATCH', { deadline: '2097-02-10T17:00', was: '2097-02-11T17:00' })).status).toBe(200);
+    expect(rij(aios.period).deadline).toBe('2097-02-10T17:00');
   });
 
   it("goes with its AIOS rows when the achterwacht's prullenbak purges it", () => {

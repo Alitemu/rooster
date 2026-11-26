@@ -6,6 +6,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { DELETE as deleteMembership } from '../[membershipId]/route';
 import { POST as undoLast } from './route';
 import { GET as pendingUndo } from '../pending-undo/route';
+import { UNDO_VENSTER_SECONDEN } from '@/lib/pendingUndo';
 
 /**
  * Same hard rule as the assignment undo tests: undoing a membership removal
@@ -142,5 +143,58 @@ describe('POST /api/planner/pool/[id]/members/undo-last', () => {
       { params: Promise.resolve({ id: f.poolId }) }
     );
     expect((await res.json()).data.pending).toBeNull();
+  });
+
+  it('is only for the acute moment: after two minutes a removal cannot be undone, by the button or by a request', async () => {
+    const f = createFixture();
+    await deleteMembership(
+      plannerRequest(`http://localhost/api/planner/pool/${f.poolId}/members/${f.membershipId}`, f.plannerId, 'DELETE'),
+      { params: Promise.resolve({ id: f.poolId, membershipId: f.membershipId }) }
+    );
+    const pendingNu = async () =>
+      (
+        await (
+          await pendingUndo(plannerRequest(`http://localhost/api/planner/pool/${f.poolId}/members/pending-undo`, f.plannerId, 'GET'), {
+            params: Promise.resolve({ id: f.poolId }),
+          })
+        ).json()
+      ).data.pending;
+    const eerst = await pendingNu();
+    expect(typeof eerst.id).toBe('string');
+    expect(eerst.verloopt_over_seconden).toBeLessThanOrEqual(UNDO_VENSTER_SECONDEN);
+
+    db.prepare("UPDATE dienstrooster_pending_undo SET aangemaakt_op = datetime('now', '-3 minutes') WHERE scope_id = ?").run(f.poolId);
+    expect(await pendingNu()).toBeNull();
+    const undoRes = await undoLast(
+      plannerRequest(`http://localhost/api/planner/pool/${f.poolId}/members/undo-last`, f.plannerId, 'POST'),
+      { params: Promise.resolve({ id: f.poolId }) }
+    );
+    expect(undoRes.status).toBe(404);
+    expect(currentMembership(f.poolId, f.personId)).toBeUndefined();
+  });
+
+  it("never puts someone in both diensten: refused when the other dienst took the person over in between", async () => {
+    const f = createFixture();
+    await deleteMembership(
+      plannerRequest(`http://localhost/api/planner/pool/${f.poolId}/members/${f.membershipId}`, f.plannerId, 'DELETE'),
+      { params: Promise.resolve({ id: f.poolId, membershipId: f.membershipId }) }
+    );
+    // The AIOS pool takes the person (nothing of theirs was left to stop it).
+    const rulesetId = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_ruleset (id, naam, config_json, aangemaakt_op) VALUES (?, ?, ?, datetime('now'))`).run(rulesetId, 'AIOS test', '{}');
+    const aiosPoolId = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_pool (id, naam, type, ruleset_id, aangemaakt_op) VALUES (?, ?, 'AIOS', ?, datetime('now'))`).run(aiosPoolId, 'AIOS test pool', rulesetId);
+    createdPoolIds.push(aiosPoolId);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, 1, '2027-01-01', '2027-12-31')`
+    ).run(crypto.randomUUID(), f.personId, aiosPoolId);
+
+    const undoRes = await undoLast(
+      plannerRequest(`http://localhost/api/planner/pool/${f.poolId}/members/undo-last`, f.plannerId, 'POST'),
+      { params: Promise.resolve({ id: f.poolId }) }
+    );
+    expect(undoRes.status).toBe(409);
+    expect(currentMembership(f.poolId, f.personId)).toBeUndefined();
   });
 });

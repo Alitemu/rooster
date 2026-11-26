@@ -2,3 +2,4 @@
 # production image (solver/Dockerfile) doesn't ship a test runner.
 -r requirements.txt
 pytest==8.3.4
+httpx==0.28.1

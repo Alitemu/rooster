@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
-import { generateTOTPSecret, hashToken } from '@/lib/auth';
+import { hashToken } from '@/lib/auth';
 import {
   createSessionToken,
   SESSION_COOKIE_NAME,
@@ -12,21 +12,19 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { GET } from './route';
 
 /**
- * The hard rule: totp_enrolled reflects this account's real totp_secret
- * column, and only ever for staff - the TotpSettingsDialog trusts this
- * value to decide whether to show "instellen" or "uitschakelen", so a
- * stale or wrong answer here would show the wrong screen for the wrong
- * reason.
+ * Who am I: the session says who is logged in, in what role, and for staff
+ * whether a new password has to come first. Two-step verification no longer
+ * exists (0.805.0): nothing about it is reported any more.
  */
 
 const createdPersonIds: string[] = [];
 
-function createStaff(totpEnrolled: boolean): string {
+function createStaff(): string {
   const personId = crypto.randomUUID();
   db.prepare(
-    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, totp_secret, aangemaakt_op)
-     VALUES (?, ?, 'PLANNER', 1, 'x', ?, datetime('now'))`
-  ).run(personId, `Test-${personId.slice(0, 8)}`, totpEnrolled ? generateTOTPSecret('Test').secret : null);
+    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
+     VALUES (?, ?, 'PLANNER', 1, 'x', datetime('now'))`
+  ).run(personId, `Test-${personId.slice(0, 8)}`);
   createdPersonIds.push(personId);
   return personId;
 }
@@ -72,21 +70,17 @@ describe('GET /api/auth/me', () => {
     expect(body.data.authenticated).toBe(false);
   });
 
-  it('reports totp_enrolled true for staff with a totp_secret', async () => {
-    const personId = createStaff(true);
+  it('reports the role of staff and says nothing about two-step verification', async () => {
+    const personId = createStaff();
     const body = await (await GET(request(personId))).json();
-    expect(body.data).toMatchObject({ authenticated: true, role: 'PLANNER', totp_enrolled: true });
+    expect(body.data).toMatchObject({ authenticated: true, role: 'PLANNER' });
+    expect(body.data).not.toHaveProperty('totp_enrolled');
   });
 
-  it('reports totp_enrolled false for staff without one', async () => {
-    const personId = createStaff(false);
-    const body = await (await GET(request(personId))).json();
-    expect(body.data).toMatchObject({ authenticated: true, totp_enrolled: false });
-  });
-
-  it('reports totp_enrolled false for a participant, never reading a column that means nothing for them', async () => {
+  it('reports a participant as a participant', async () => {
     const personId = createParticipant();
     const body = await (await GET(request(personId, 'person'))).json();
-    expect(body.data).toMatchObject({ authenticated: true, role: 'DEELNEMER', totp_enrolled: false });
+    expect(body.data).toMatchObject({ authenticated: true, role: 'DEELNEMER' });
+    expect(body.data).not.toHaveProperty('totp_enrolled');
   });
 });

@@ -6,8 +6,24 @@
 
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { generateAccessToken, hashToken, hashPassword } from '@/lib/auth';
+import { getISOWeek, parseISO } from '@/lib/holidays';
+import { verschuifDagen, verschuif } from '../../scripts/demoKalender.mjs';
+
+/**
+ * The fixtures were written for January 2027. A period in the past reads
+ * "alleen nog bekijken" and a past shift cannot be swapped, so every date
+ * moves along with the real date in whole weeks (scripts/demoKalender.mjs).
+ */
+const DEMO_SHIFT = verschuifDagen();
+export function demoDatum(basis: string): string {
+  return verschuif(basis, DEMO_SHIFT);
+}
+/** The ISO year and week a (shifted) date falls in, for the slot columns. */
+export function isoJaarWeek(datum: string): [number, number] {
+  return getISOWeek(parseISO(datum));
+}
 
 interface TestUser {
   id: string;
@@ -71,12 +87,13 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   }
 
   // Create period
+  // A published period is definitief (swapping needs that, 0.102.0): the planner's publication tests start from GEGENEREERD.
   db.prepare(`
     INSERT INTO dienstrooster_schedule_period (
-      id, pool_id, naam, status, start_datum, eind_datum, deadline, aangemaakt_op
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      id, pool_id, naam, status, start_datum, eind_datum, deadline, definitief_op, aangemaakt_op
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(periodId, pool.id, `E2E-Period-${timestamp}`, status,
-    '2027-01-04', '2027-02-21', '2026-12-31T23:59:59Z');
+    demoDatum('2027-01-04'), demoDatum('2027-02-21'), demoDatum('2026-12-31T23:59:59Z'), status === 'GEPUBLICEERD' ? new Date().toISOString() : null);
 
   // Create test users
   const users = createTestUsers(5, periodId);
@@ -105,8 +122,8 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   // roster with a standing rule violation in it, and the publication dialog
   // rightly refused to call it ready.
   const WEEK_MONDAYS = [
-    '2027-01-04', '2027-01-11', '2027-01-18', '2027-01-25',
-    '2027-02-01', '2027-02-08', '2027-02-15',
+    demoDatum('2027-01-04'), demoDatum('2027-01-11'), demoDatum('2027-01-18'), demoDatum('2027-01-25'),
+    demoDatum('2027-02-01'), demoDatum('2027-02-08'), demoDatum('2027-02-15'),
   ];
   const slots: Array<{ id: string; datum: string; type: string }> = [];
   for (let i = 0; i < WEEK_MONDAYS.length; i++) {
@@ -118,7 +135,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
       INSERT INTO dienstrooster_shift_slot (
         id, period_id, datum, iso_jaar, iso_week, shift_type_id
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(slotId, periodId, datum, 2027, i + 1, shiftTypeId);
+    `).run(slotId, periodId, datum, ...isoJaarWeek(datum), shiftTypeId);
 
     slots.push({ id: slotId, datum, type: i % 3 === 0 ? 'WEEKEND' : 'AVOND' });
   }
@@ -201,13 +218,73 @@ async function loginAsStaff(page: Page, codenaam: string): Promise<void> {
 }
 
 /**
- * Opens one part of the AIOS period page: they all start closed, and
- * opening one closes the others that are not pinned (components/AiosSectie.tsx).
+ * Opens one section of a period page, of either dienst, as a planner does since 2.0.0: the item in the list
+ * on the left, or in the menu behind the button in the blue bar on a narrow screen. Returns the section
+ * that is then on screen. A title is matched at the start of the item, so "Dienstrooster" finds
+ * "Dienstrooster (automatisch ingevuld)".
  */
+export async function openOnderdeel(page: Page, titel: string | RegExp): Promise<Locator> {
+  const patroon = typeof titel === 'string' ? new RegExp(`^${titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : titel;
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  const menu = page.getByTestId('onderdelen-menu');
+  // The list, or the menu below 1100 px: whichever this screen has.
+  await expect(lijst.or(menu.locator('visible=true')).first()).toBeVisible();
+  if ((await lijst.count()) === 0) await menu.click();
+  const item = lijst.getByRole('link').filter({ has: page.locator('span.block.font-medium', { hasText: patroon }) }).first();
+  await item.click();
+  const sectie = huidigOnderdeel(page);
+  await expect(sectie.getByRole('heading', { level: 2 }).first()).toHaveText(patroon);
+  return sectie;
+}
+
+/** The titles in the list of sections of a period page, in order (the menu below 1100 px is opened and closed for it). */
+export async function onderdelenInLijst(page: Page): Promise<string[]> {
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  const menu = page.getByTestId('onderdelen-menu');
+  await expect(lijst.or(menu.locator('visible=true')).first()).toBeVisible();
+  const viaMenu = (await lijst.count()) === 0;
+  if (viaMenu) await menu.click();
+  const titels = (await lijst.locator('a span.block.font-medium').allInnerTexts()).map((t) => t.trim());
+  if (viaMenu) await page.keyboard.press('Escape');
+  return titels;
+}
+
+/** The section on screen in a period page (both diensten). */
+export function huidigOnderdeel(page: Page): Locator {
+  return page.locator('[data-testid^="onderdeel-"], [data-onderdeel]').filter({ has: page.getByRole('heading', { level: 2 }) }).first();
+}
+
+/** One section of the AIOS period page (since 2.0.0 through the list; openOnderdeel). */
 export async function openAiosSectie(page: Page, titel: string): Promise<void> {
-  const knop = page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
-  if ((await knop.getAttribute('aria-expanded')) !== 'true') await knop.click();
-  await expect(knop).toHaveAttribute('aria-expanded', 'true');
+  await openOnderdeel(page, new RegExp(`^${titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+}
+
+/**
+ * Opens the section "Dienstrooster (...)": the brackets say how the roster stands (nog niet gegenereerd,
+ * automatisch ingevuld, handmatig aangepast, gepubliceerd), which a test should not have to know to open it.
+ */
+export async function openDienstrooster(page: Page): Promise<void> {
+  await openOnderdeel(page, /^Dienstrooster( \(|$)/);
+}
+
+/**
+ * A published roster puts the participant's page in foldable sections, closed
+ * to begin with but the achterwacht's roster (2.1.0): open them all and pin them, so the rest of
+ * a test sees the page as it saw it before. A page that is not published has
+ * none and is left alone.
+ */
+export async function openSecties(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const ids = ['aios-sectie-rooster', 'aios-sectie-ruilen', 'aios-sectie-voorkeuren', 'deelnemer-sectie-rooster', 'deelnemer-sectie-ruilen'];
+  for (const id of ids) {
+    const sectie = page.getByTestId(id);
+    if ((await sectie.count()) === 0) continue;
+    const kop = sectie.getByRole('heading').getByRole('button');
+    if ((await kop.getAttribute('aria-expanded')) !== 'true') await kop.click();
+    await expect(kop).toHaveAttribute('aria-expanded', 'true');
+    const vast = sectie.getByRole('button', { name: /^Vastzetten|^Losmaken/ });
+    if ((await vast.getAttribute('aria-pressed')) !== 'true') await vast.click();
+  }
 }
 
 /**
@@ -256,4 +333,16 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   }
 
   db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+}
+
+/**
+ * The list of swap requests on a participant's page of the achterwacht. It
+ * is open by itself when a colleague's request waits for an answer (1.5.0,
+ * lib/ruilWachtend.ts); otherwise "Ruilverzoeken bekijken" opens it.
+ */
+export async function toonRuilverzoeken(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const bekijken = page.getByRole('button', { name: 'Ruilverzoeken bekijken' });
+  if ((await bekijken.count()) > 0) await bekijken.click();
+  await expect(page.getByRole('button', { name: 'Ruilverzoeken verbergen' })).toBeVisible();
 }

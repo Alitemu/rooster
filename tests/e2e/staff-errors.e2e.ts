@@ -63,9 +63,9 @@ test('adding someone twice says so under Toevoegen, in sight', async ({ page }) 
   await openStaff(page);
   const form = page.locator('div', { has: page.getByText('Nieuw personeelslid toevoegen') }).last();
   await form.getByPlaceholder('bijv. staf31').fill(`Dubbel-${tag}`);
-  const dates = form.locator('input[type="date"]');
-  await dates.nth(0).fill('2099-04-01');
-  await dates.nth(1).fill('2099-05-01');
+  const dates = form.locator('input[data-datumveld]');
+  await dates.nth(0).fill('01-04-2099');
+  await dates.nth(1).fill('01-05-2099');
   await form.getByRole('button', { name: 'Toevoegen' }).click();
 
   const fout = page.getByTestId('toevoegen-fout');
@@ -78,10 +78,10 @@ test('adding someone twice says so under Toevoegen, in sight', async ({ page }) 
 
 test('a change that overlaps says so under its own row, in sight', async ({ page }) => {
   await openStaff(page);
-  const row = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ hasText: '2099-02-28' });
+  const row = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ hasText: '28-02-2099' });
   await row.getByRole('button', { name: 'Bewerken' }).click();
-  const editing = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ has: page.locator('input[type="date"]') });
-  await editing.locator('input[type="date"]').nth(1).fill('2099-05-01');
+  const editing = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ has: page.locator('input[data-datumveld]') });
+  await editing.locator('input[data-datumveld]').nth(1).fill('01-05-2099');
   await editing.getByRole('button', { name: 'Opslaan' }).click();
 
   const fout = page.getByTestId('rij-fout');

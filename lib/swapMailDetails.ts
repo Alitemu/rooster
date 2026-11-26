@@ -38,6 +38,15 @@ export function formatSwapDate(datum: string): string {
   }).format(new Date(`${datum}T00:00:00Z`));
 }
 
+/**
+ * The in-app notice of a new swap request: the two days in words, as in the mail (1.1.5). It said
+ * "Aangeboden: 2027-03-04 (avonddienst)".
+ */
+export function ruilverzoekDetails(aangeboden: SwapShift | undefined, gevraagd: SwapShift | undefined): string {
+  const regel = (s: SwapShift | undefined) => (s ? `${formatSwapDate(s.datum)} (${TELLER_LABELS[s.teller] ?? s.teller})` : '');
+  return `Aangeboden: ${regel(aangeboden)}\nGevraagd: ${regel(gevraagd)}`;
+}
+
 function shift(s: SwapShift): string {
   return `${TELLER_LABELS[s.teller] ?? 'dienst'} op ${formatSwapDate(s.datum)}`;
 }
@@ -80,7 +89,7 @@ export function swapMailDetails(params: {
       `Jij geeft: je ${shift(geeft)} aan ${ander}`,
       `Jij krijgt: de ${shift(krijgt)} van ${ander}`,
       '',
-      'De planner en het roosterbureau krijgen deze ruil ook door.',
+      'Het Roosterbureau en de planner zijn hiervan op de hoogte gebracht.',
     ];
   } else if (aanvrager) {
     regels = [`Jij geeft: je ${shift(params.aangeboden)}`, `Jij krijgt: een ${shift(params.gevraagd)}`];
@@ -101,13 +110,16 @@ export function swapMailDetails(params: {
 }
 
 /**
- * The two codenamen the confirmation of an approved swap is sent to. Not
- * participants: the planner adds a row for each to the flow's sheet, with
- * the planner's and the roster office's address. The app puts no
- * address in a verzendlijst itself, so a forged one can only ever reach
- * people in that sheet.
+ * The confirmation of an approved swap goes to one codenaam, the
+ * Roosterbureau, with the two who swapped and the Planner in the CC
+ * (DOORGEVEN_CC_PLANNER; the two are CC'd by their codenaam). Not
+ * participants: the planner adds a row for each of the two fixed codenamen
+ * to the flow's sheet, with the roster office's and the planner's address.
+ * The app puts no address in a verzendlijst itself, so a forged one can only
+ * ever reach people in that sheet.
  */
-export const DOORGEVEN_AAN = ['Planner', 'Roosterbureau'] as const;
+export const DOORGEVEN_AAN = 'Roosterbureau';
+export const DOORGEVEN_CC_PLANNER = 'Planner';
 
 /**
  * For the planner and the roster office: who does which shift now.

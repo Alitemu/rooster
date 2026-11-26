@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { tekstNaarHtml, verzendlijstPersonen } from './verzendlijst';
+import { buildVerzendlijst, tekstNaarHtml, verzendlijstPersonen } from './verzendlijst';
 
 /**
  * The rule: a flow that replaces each codenaam in `personen` by a real
@@ -73,5 +73,13 @@ describe('tekstNaarHtml', () => {
         expect(terug).toBe(tekst.replace(/\r\n/g, '\n'));
       })
     );
+  });
+});
+
+describe('dienst', () => {
+  it("says the mailing is the achterwacht's, whatever the soort", () => {
+    for (const soort of ['UITNODIGING', 'RUIL_DOORGEVEN', 'LINK_AANVRAAG'] as const) {
+      expect(buildVerzendlijst({ soort, automatisch: true, periode: 'P' }, []).dienst).toBe('ACHTERWACHT');
+    }
   });
 });

@@ -29,6 +29,19 @@ import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+
+/**
+ * What the planner does after a roster mail went out (1.6.0, the user's
+ * wording). The app knows the verzendlijst reached the mailbox of the
+ * Power Automate flow, not that the flow mailed everyone: the flow's own
+ * sent items show that. `adres` is where the verzendlijst goes
+ * (Mailinstellingen); without one the sentence names the flow.
+ */
+export function mailControleZin(adres: string | null | undefined): string {
+  const mailbox = adres?.trim() ? `de mailbox ${adres.trim()}` : 'de mailbox van de Power Automate-stroom';
+  return `Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van ${mailbox}.`;
+}
 
 interface ValidationCheck {
   slots_filled: boolean;
@@ -72,6 +85,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
   const [error, setError] = useState<string | null>(null);
   const [mailKlaar, setMailKlaar] = useState<boolean | null>(null);
   const [resultaat, setResultaat] = useState<RosterMailResult | null>(null);
+  const [verzendlijstAan, setVerzendlijstAan] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,7 +99,10 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
     fetch(withBasePath('/api/planner/mail-settings'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.success) setMailKlaar(!!data.data.ingesteld && !data.data.uitgeschakeld);
+        if (data?.success) {
+          setMailKlaar(!!data.data.ingesteld && !data.data.uitgeschakeld);
+          setVerzendlijstAan(data.data.verzendlijst_aan ?? null);
+        }
       })
       .catch(() => {});
 
@@ -100,7 +117,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
         const data = await res.json();
         setCheckResult(data.data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Valideren van rooster mislukt');
+        setError(foutTekst(err, 'Valideren van rooster mislukt'));
       } finally {
         setValidating(false);
       }
@@ -136,7 +153,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
       setResultaat(data.data?.mail ?? { verstuurd: true, aantal: 0 });
       if (onSuccess) onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publiceren van rooster mislukt');
+      setError(foutTekst(err, 'Publiceren van rooster mislukt'));
     } finally {
       setPublishing(false);
     }
@@ -200,7 +217,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
               {resultaat.verstuurd ? (
                 <p className="text-sm text-neutral-700">
                   {resultaat.aantal === 1 ? '1 persoon heeft' : `${resultaat.aantal} personen hebben`} een e-mail
-                  gekregen met het eigen rooster.
+                  gekregen met het eigen rooster. {mailControleZin(verzendlijstAan)}
                 </p>
               ) : (
                 <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
@@ -362,7 +379,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
             <button
               onClick={handlePublish}
               disabled={publishing || validating || !canPublish}
-              className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
+              className="flex-1 px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-neutral-400 transition-colors"
             >
               {publishing
                 ? 'Bezig...'

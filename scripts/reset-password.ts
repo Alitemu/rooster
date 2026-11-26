@@ -1,17 +1,18 @@
 /**
  * Sets a new password for one staff account, for when the planner has
- * forgotten theirs. There is no "forgot password" on the login page: the
- * app keeps no e-mail address to send a reset link to, and a way back
- * that anyone at the login screen could start would be a way in.
+ * forgotten theirs. The login page has no "forgot password" for planners:
+ * the app keeps no e-mail address to send a reset link to. The one way back
+ * from the start page is for the beheerder, with the Gmail address of
+ * Mailinstellingen typed in "Link kwijt?" (lib/wachtwoordHerstel.ts); this
+ * script stays the way back when that mail is not set up.
  *
- * Needs access to the server, like scripts/reset-totp.ts: it is the way
- * back for whoever runs the installation. It asks for the new password
+ * Needs access to the server: it is the way back for whoever runs the
+ * installation. It asks for the new password
  * twice without showing it (with no terminal, it reads NIEUW_WACHTWOORD
  * from the environment instead - never a command-line argument, which
  * every process on the host could read). The same rules apply as in the
  * app, and the password from the repository is refused. Every session of
- * the account is ended and the change is in the audit trail. Two-step
- * verification stays as it is; is the phone gone too, run reset-totp.
+ * the account is ended and the change is in the audit trail.
  *
  * Usage (as the app's own user, so the database files stay its own):
  *   docker compose exec -u node web npx tsx scripts/reset-password.ts <CODENAAM>

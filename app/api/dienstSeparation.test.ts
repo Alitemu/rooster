@@ -78,7 +78,10 @@ const withoutIds = aboutADienst.filter((r) => !r.path.includes('['));
 
 describe('the achterwacht and the AIOS planner see nothing of each other', () => {
   it('finds the routes', () => {
-    expect(withIds.length).toBeGreaterThan(80);
+    // 159 with an id and 187 routes in all in 0.106.0: the floors sit just under, so a whole folder dropping out of the glob is seen.
+    expect(withIds.length).toBeGreaterThan(150);
+    expect(routes.length).toBeGreaterThan(180);
+    expect(routes.filter((r) => r.path.startsWith('aios/')).length).toBeGreaterThan(55);
   });
 
   for (const [mine, theirs] of [

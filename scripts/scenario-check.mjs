@@ -1,7 +1,7 @@
 /**
  * The planner's own case, end to end: 15 people, one of them a fellow with
- * a part-time day, a period from 2026-12-28 to 2027-09-05 - across ISO week
- * 53 of 2026 and the year boundary - generated with every method the
+ * a part-time day, a period of 36 weeks that starts on the Monday of ISO week
+ * 53 (28 December 2026, the next one 27 December 2032) - across the year boundary - generated with every method the
  * dialog offers (weighted, lexicographic, multi_start, randomized) and
  * several windows, against the real solver.
  *
@@ -12,7 +12,9 @@
  * blocked day worked, nobody's window broken (week 53 included), nobody
  * past their maximum, the fellow on no weekend and not on their part-time
  * Monday. "Rooster verwijderen" then takes it back to gesloten and a
- * generation after it works.
+ * generation after it works. That roster is published, a dienst falls away,
+ * and the next period opens with exactly that dienst to make up (the
+ * carry-over, on the real routes).
  *
  * Prerequisites, as for full-check: a seeded database, the solver on 8000
  * and the app (ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000).
@@ -31,14 +33,44 @@ import { fileURLToPath } from 'url';
 
 const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = process.env.APP_URL || 'http://localhost:3000';
-const START = '2026-12-28';
-const END = '2027-09-05';
+// The period starts on the Monday of ISO week 53 of the next year that has one
+// (28 December 2026, then 27 December 2032), at least four weeks from now: a
+// deadline in the past is refused. END is 36 weeks later.
+const ANKER = JSON.parse(
+  execFileSync(
+    'npx',
+    [
+      'tsx',
+      '-e',
+      `import { getWeeksInYear, getWeekRange, addDays, getHolidaysInRange, parseISO, dateToISO } from './lib/holidays';
+       const grens = dateToISO(new Date(Date.now() + 28 * 86400000));
+       let jaar = new Date().getFullYear();
+       let start = '';
+       for (; jaar < new Date().getFullYear() + 20; jaar++) {
+         if (getWeeksInYear(jaar) !== 53) continue;
+         const maandag = getWeekRange(jaar, 53)[0];
+         if (maandag >= grens) { start = maandag; break; }
+       }
+       const eind = addDays(start, 36 * 7 - 1);
+       const feestdagen = getHolidaysInRange(start, eind).map((h) => h.date);
+       console.log(JSON.stringify({ jaar, start, eind, deadline: addDays(start, -27) + 'T12:00', feestdagen, volgendeMaandag: addDays(start, 7) }));`,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' }
+  ).trim().split('\n').pop()
+);
+const START = ANKER.start;
+const END = ANKER.eind;
+const DEADLINE = ANKER.deadline;
+const WEEK53_JAAR = ANKER.jaar;
+const WEEK1_MAANDAG = ANKER.volgendeMaandag;
 const KORT = process.argv.includes('--kort');
+const addDagen = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 // Short: weighted at window 1 fills everything within the first 120
 // seconds; window 2 needs "langer proberen" (audit 14).
 const MODES = (process.env.SCENARIO_MODES || (KORT ? 'weighted' : 'weighted,lexicographic,multi_start,randomized')).split(',');
 const WINDOWS = (process.env.SCENARIO_WINDOWS || (KORT ? '1' : '0,1,2')).split(',').map(Number);
-// The dialog's own default (solver/main.py SolverInput.time_limit_seconds).
+// 120 s, the dialog's first run until 0.905.0 (now 300, lib/solverZoektijd.ts): kept as
+// the stricter first try (300 would make the full run hours longer); the steps after it are the app's.
 const TIME_LIMIT = Number(process.env.SCENARIO_TIME || 120);
 
 function resolveDbPath() {
@@ -78,10 +110,13 @@ async function req(method, path, { jar, body } = {}) {
   } catch {}
   return { status: res.status, json };
 }
-// "Langer proberen", as the dialog offers it (RosterGenerationDialog
-// nextTimeLimitSeconds: 300 s, then 600 s after its own 120 s), scaled to
-// SCENARIO_TIME.
-const LONGER = [TIME_LIMIT * 2.5, TIME_LIMIT * 5];
+// "Opnieuw maken met meer zoektijd", as the dialog offers it since 0.905.0
+// (lib/solverZoektijd.ts: 10 minutes, then 30), scaled to SCENARIO_TIME. Until
+// 0.905.0 the steps were 5 and 10 minutes, and lexicographic at window 2 left
+// 2 shifts empty after both in two runs in a row (the 0.904.0 gate), where the
+// same code had filled them all at 0.901.0: this case sits on the edge of what
+// 10 minutes finds.
+const LONGER = [TIME_LIMIT * 5, TIME_LIMIT * 15];
 async function generateOnce(periodId, jar, timeLimit) {
   const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body: { time_limit_seconds: timeLimit } });
   if (start.status !== 200) return { ok: false, detail: `start ${start.status} ${JSON.stringify(start.json)}` };
@@ -132,7 +167,7 @@ for (const [naam, teller] of [['Avonddienst', 'AVOND'], ['Zaterdag', 'WEEKEND'],
 const people = [];
 for (let i = 1; i <= 15; i++) {
   const id = insert('dienstrooster_person', { codenaam: `Scenario-${tag}-${String(i).padStart(2, '0')}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
-  insert('dienstrooster_pool_membership', { person_id: id, pool_id: poolId, deelnamefactor: 1, geldig_vanaf: '2026-01-01', geldig_tot: '2029-12-31' });
+  insert('dienstrooster_pool_membership', { person_id: id, pool_id: poolId, deelnamefactor: 1, geldig_vanaf: `${WEEK53_JAAR - 1}-01-01`, geldig_tot: `${WEEK53_JAAR + 3}-12-31` });
   people.push(id);
 }
 const fellow = people[14];
@@ -143,7 +178,7 @@ rec('Planner logs in', login.status === 200, `status=${login.status}`);
 
 const created = await req('POST', '/api/planner/periods', {
   jar: planner,
-  body: { naam: `Scenario ${tag}`, pool_id: poolId, start_datum: START, eind_datum: END, deadline: '2026-12-01T12:00' },
+  body: { naam: `Scenario ${tag}`, pool_id: poolId, start_datum: START, eind_datum: END, deadline: DEADLINE },
 });
 const periodId = created.json?.data?.id;
 rec('Period created', !!periodId, `status=${created.status}`);
@@ -159,7 +194,7 @@ const opened = await req('POST', `/api/periods/${periodId}/open`, {
     naam: `Scenario ${tag}`,
     start_datum: START,
     eind_datum: END,
-    deadline: '2026-12-01T12:00',
+    deadline: DEADLINE,
     ruleset: { windowWeeks: 2, distributionMode: 'GELIJK', bandAvond: suggested?.AVOND, bandWeekend: suggested?.WEEKEND, bandFeestdag: suggested?.FEESTDAG },
   },
 });
@@ -179,13 +214,14 @@ const slots = db
 const days = Math.round((Date.parse(`${END}T00:00:00Z`) - Date.parse(`${START}T00:00:00Z`)) / 86400000) + 1;
 rec('One dienst for every day of the period', slots.length === days && new Set(slots.map((s) => s.datum)).size === days, `${slots.length} diensten, ${days} dagen`);
 const byDate = Object.fromEntries(slots.map((s) => [s.datum, s]));
+const WEEK53_DAGEN = [START, addDagen(START, 4), addDagen(START, 6)];
 rec(
-  '28 December 2026 to 3 January 2027 are ISO week 53 of 2026',
-  ['2026-12-28', '2027-01-01', '2027-01-03'].every((d) => byDate[d]?.iso_jaar === 2026 && byDate[d]?.iso_week === 53) &&
-    byDate['2027-01-04']?.iso_jaar === 2027 && byDate['2027-01-04']?.iso_week === 1,
-  JSON.stringify(['2027-01-01', '2027-01-04'].map((d) => [d, byDate[d]?.iso_jaar, byDate[d]?.iso_week]))
+  `ISO week 53 of ${WEEK53_JAAR} runs to ${WEEK1_MAANDAG} and then week 1 starts`,
+  WEEK53_DAGEN.every((d) => byDate[d]?.iso_jaar === WEEK53_JAAR && byDate[d]?.iso_week === 53) &&
+    byDate[WEEK1_MAANDAG]?.iso_jaar === WEEK53_JAAR + 1 && byDate[WEEK1_MAANDAG]?.iso_week === 1,
+  JSON.stringify([addDagen(START, 4), WEEK1_MAANDAG].map((d) => [d, byDate[d]?.iso_jaar, byDate[d]?.iso_week]))
 );
-const feestdagen = ['2027-01-01', '2027-03-28', '2027-03-29', '2027-04-27', '2027-05-06', '2027-05-16', '2027-05-17'];
+const feestdagen = ANKER.feestdagen;
 rec('Holidays are feestdagdiensten', feestdagen.every((d) => byDate[d]?.teller === 'FEESTDAG'), feestdagen.map((d) => `${d}=${byDate[d]?.teller}`).join(' '));
 
 // ---------- THE FELLOW: weekends and a part-time Monday ----------
@@ -276,6 +312,103 @@ const left = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHER
 rec('Rooster verwijderen: everything gone, back to gesloten', reset.status === 200 && left === 0 && reset.json?.data?.status === 'GESLOTEN', `${reset.json?.data?.verwijderd} verwijderd`);
 const again = await generate(periodId, planner);
 rec('…and generating after it works', again.ok && again.result.unfilled_slots.length === 0, again.ok ? `${again.result.unfilled_slots.length} leeg` : again.detail);
+
+// ---------- THE NEXT PERIOD: what is owed goes along ----------
+// "Eerlijk over de jaren" as a chain, on the real routes: the roster is
+// published, a dienst falls away afterwards (someone is ill and the planner
+// takes it off), the next period opens, and exactly that person has exactly
+// that dienst to make up there. scripts/check-carryover-live.mjs did this
+// until the generation moved to the background in October 2026 and then
+// failed unseen, outside every gate (audit 4, N-02); here it runs at every
+// release, --kort included.
+const check = await req('GET', `/api/planner/period/${periodId}/publication-check`, { jar: planner });
+// The scenario's roster may hold a few people just outside their bereik: the
+// planner confirms those, as the dialog does.
+const published = await req('POST', `/api/planner/period/${periodId}/publish`, { jar: planner, body: { confirmOverrides: true } });
+rec('The full roster is published', published.status === 200, `status=${published.status} ${JSON.stringify(published.json?.error ?? '').slice(0, 200)}`);
+
+// Everyone but the fellow has the period's own bereik (verdeling GELIJK, a
+// member all period). Who stands outside it at publication already carries
+// something; the one taken ill is picked from those inside it.
+const bereik = check.json?.data?.bands ?? {};
+const telling = db
+  .prepare(
+    `SELECT a.person_id, st.teller, COUNT(*) AS n FROM dienstrooster_assignment a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+      WHERE a.schedule_version_id = ? GROUP BY a.person_id, st.teller`
+  )
+  .all(periodId);
+const aantal = (p, teller) => telling.find((t) => t.person_id === p && t.teller === teller)?.n ?? 0;
+const alBuiten = new Set([fellow]);
+for (const p of people) for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG']) if (bereik[teller] && (aantal(p, teller) < bereik[teller][0] || aantal(p, teller) > bereik[teller][1])) alBuiten.add(p);
+const [avondMin] = bereik.AVOND ?? [];
+const zieke = people.filter((p) => !alBuiten.has(p)).map((p) => ({ p, count: aantal(p, 'AVOND'), min: avondMin })).sort((x, y) => x.count - y.count)[0];
+const weg = zieke ? zieke.count - zieke.min + 1 : 0;
+const avonden = zieke
+  ? db
+      .prepare(
+        `SELECT a.id FROM dienstrooster_assignment a
+           JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+           JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+          WHERE a.schedule_version_id = ? AND a.person_id = ? AND st.teller = 'AVOND'
+          ORDER BY s.datum DESC LIMIT ?`
+      )
+      .all(periodId, zieke.p, weg)
+  : [];
+let afgehaald = 0;
+for (const a of avonden) {
+  const del = await req('DELETE', `/api/planner/period/${periodId}/assignments/${a.id}/delete`, { jar: planner, body: { reason: 'Ziek gemeld' } });
+  if (del.status === 200) afgehaald++;
+}
+rec('After publication a dienst falls away: one person ends one avonddienst short', !!zieke && weg > 0 && afgehaald === weg, `${afgehaald} van ${weg} afgehaald, had ${zieke?.count}, minimum ${zieke?.min}`);
+
+const START2 = addDagen(END, 1);
+const END2 = addDagen(START2, 8 * 7 - 1);
+const DEADLINE2 = `${addDagen(START2, -27)}T12:00`;
+const created2 = await req('POST', '/api/planner/periods', {
+  jar: planner,
+  body: { naam: `Scenario ${tag} vervolg`, pool_id: poolId, start_datum: START2, eind_datum: END2, deadline: DEADLINE2 },
+});
+const period2 = created2.json?.data?.id;
+const capacity2 = await req('GET', `/api/periods/${period2}/capacity?window_weeks=2&start_datum=${START2}&eind_datum=${END2}`, { jar: planner });
+const suggested2 = capacity2.json?.data?.suggested_band;
+const opened2 = await req('POST', `/api/periods/${period2}/open`, {
+  jar: planner,
+  body: {
+    naam: `Scenario ${tag} vervolg`,
+    start_datum: START2,
+    eind_datum: END2,
+    deadline: DEADLINE2,
+    ruleset: { windowWeeks: 2, distributionMode: 'GELIJK', bandAvond: suggested2?.AVOND, bandWeekend: suggested2?.WEEKEND, bandFeestdag: suggested2?.FEESTDAG },
+  },
+});
+rec('The next period opens', opened2.status === 200, `status=${opened2.status} ${JSON.stringify(opened2.json?.error ?? '').slice(0, 200)}`);
+const meegenomen = db
+  .prepare(`SELECT person_id, teller, delta, reden FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ? AND categorie = 'CARRY_OVER'`)
+  .all(period2 ?? '');
+const vanZieke = meegenomen.filter((m) => m.person_id === zieke?.p);
+rec(
+  '…and exactly that person has exactly one avonddienst to make up there',
+  vanZieke.length === 1 && vanZieke[0].teller === 'AVOND' && vanZieke[0].delta === 1,
+  JSON.stringify(vanZieke.map((m) => `${m.teller} ${m.delta}`))
+);
+rec('…said in words, not as a number', vanZieke[0]?.reden === '1 avonddienst in te halen van vorige periode', vanZieke[0]?.reden);
+const onterecht = meegenomen.filter((m) => m.person_id !== zieke?.p && !alBuiten.has(m.person_id));
+rec(
+  '…and nobody who ended inside their bereik is charged for it',
+  onterecht.length === 0 && opened2.json?.data?.carry_over_entries === meegenomen.length,
+  `${meegenomen.length} rijen, ${onterecht.length} bij iemand die binnen het bereik eindigde`
+);
+const opOud = db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ? AND categorie = 'CARRY_OVER'`).get(periodId).n;
+rec('…and nothing is booked against the period it comes from', opOud === 0, `${opOud} rijen`);
+const gezien = await req('GET', `/api/planner/period/${period2}/import-balances`, { jar: planner });
+const regels = gezien.json?.data?.doorgeschoven?.regels ?? [];
+rec(
+  'The planner sees it on the new period',
+  regels.length === meegenomen.length && regels.some((r) => r.tekst === '1 avonddienst in te halen van vorige periode'),
+  JSON.stringify(regels.map((r) => r.tekst))
+);
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

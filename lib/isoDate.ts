@@ -27,6 +27,14 @@ export function isValidIsoDate(value: unknown): value is string {
 }
 
 /**
+ * A real date within the years a roster can concern (2000 to 2199). The part-time overlap check walks the days of a
+ * pattern, so "from 1000-01-01 to 9999-12-31" held the whole app for seconds on every request.
+ */
+export function isPlausibleIsoDate(value: unknown): value is string {
+  return isValidIsoDate(value) && value >= '2000-01-01' && value <= '2199-12-31';
+}
+
+/**
  * A date as a planner's file may hold it: YYYY-MM-DD, or d-m-yyyy (also
  * with / or .) the way a Dutch Excel writes a date back when it saves a
  * CSV it opened. The real calendar date as YYYY-MM-DD, or null.

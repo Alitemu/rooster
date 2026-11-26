@@ -36,9 +36,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * much as they cared to send. Caddy caps request bodies too (Caddyfile);
  * this covers running the app without it.
  */
-export async function parseJsonBody<T = Record<string, unknown>>(req: NextRequest): Promise<Partial<T>> {
+export async function parseJsonBody<T = Record<string, unknown>>(
+  req: NextRequest,
+  opties: { maxBytes?: number } = {}
+): Promise<Partial<T>> {
   try {
-    const text = await readCappedBody(req);
+    const text = await readCappedBody(req, opties.maxBytes ?? MAX_JSON_BODY_BYTES);
     if (text === null) return {} as Partial<T>;
     const parsed = JSON.parse(text);
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -119,10 +122,17 @@ export function forbiddenResponse(message = 'Niet toegestaan'): NextResponse {
 /** Largest JSON body any route reads (parseJsonBody). */
 export const MAX_JSON_BODY_BYTES = 1_000_000;
 
-/** The body as text, or null when it is larger than MAX_JSON_BODY_BYTES. */
-async function readCappedBody(req: NextRequest): Promise<string | null> {
+/**
+ * The restore of a backup (app/api/admin/back-up/terugzetten) carries the file itself, base64 in JSON: up to
+ * lib/dbBackupMail.ts MAX_BACKUP_BYTES and a third more. Only that route reads this much; Caddy lets only that
+ * path through with it (docker-compose.yml), and next.config.js proxyClientMaxBodySize matches.
+ */
+export const MAX_BACKUP_UPLOAD_BYTES = 32 * 1024 * 1024;
+
+/** The body as text, or null when it is larger than `max`. */
+async function readCappedBody(req: NextRequest, max: number): Promise<string | null> {
   const declared = Number(req.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > MAX_JSON_BODY_BYTES) return null;
+  if (Number.isFinite(declared) && declared > max) return null;
   if (!req.body) return '';
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -131,7 +141,7 @@ async function readCappedBody(req: NextRequest): Promise<string | null> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_JSON_BODY_BYTES) {
+    if (total > max) {
       await reader.cancel();
       return null;
     }

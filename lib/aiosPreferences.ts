@@ -22,7 +22,6 @@ import { db } from '@/db/client';
 import type { AiosCode, BlokSoort, BlokVorm } from '@/lib/aiosDiensten';
 import {
   LEGE_WENS,
-  OPMERKING_MAX_LENGTH,
   parttimeLieverNiet,
   type AiosVoorkeurDag,
   type AiosWens,
@@ -35,8 +34,8 @@ import {
 export * from '@/lib/aiosVoorkeur';
 import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
 import { syncAiosPersoon } from '@/lib/aiosSync';
+import { ruimAiosRedenenOp } from '@/lib/aiosReden';
 import { isValidIsoDate } from '@/lib/isoDate';
-import { validateSingleLine } from '@/lib/vrijeTekst';
 
 export interface AiosPeriode {
   id: string;
@@ -63,40 +62,30 @@ export function loadAiosPeriode(periodId: string): AiosPeriode | undefined {
     .get(periodId) as AiosPeriode | undefined;
 }
 
-/** Every dienst of the period per day, with the person's mark on it. */
-export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosVoorkeurDag[] {
-  const rows = db
-    .prepare(
-      `SELECT sl.id AS slot_id, sl.datum, sl.iso_week, sl.weekend_id, sl.is_feestdag, sl.feestdag_naam,
+interface DienstRij {
+  slot_id: string;
+  datum: string;
+  iso_week: number;
+  weekend_id: string | null;
+  is_feestdag: number;
+  feestdag_naam: string | null;
+  code: AiosCode;
+  naam: string;
+  start_tijd: string;
+  eind_tijd: string;
+  blok_id: string | null;
+  blok_soort: BlokSoort | null;
+  blok_vorm: BlokVorm | null;
+  blok_start: string | null;
+  blok_eind: string | null;
+}
+
+const DIENST_KOLOMMEN = `sl.id AS slot_id, sl.datum, sl.iso_week, sl.weekend_id, sl.is_feestdag, sl.feestdag_naam,
               st.code, st.naam, st.start_tijd, st.eind_tijd,
-              b.id AS blok_id, b.soort AS blok_soort, b.vorm AS blok_vorm, b.start_datum AS blok_start, b.eind_datum AS blok_eind,
-              av.blocking_level AS level, av.source AS bron
-       FROM dienstrooster_shift_slot sl
-       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
-       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
-       LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = ?
-       WHERE sl.period_id = ? AND st.code IS NOT NULL
-       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
-    )
-    .all(personId, periodId) as Array<{
-    slot_id: string;
-    datum: string;
-    iso_week: number;
-    weekend_id: string | null;
-    is_feestdag: number;
-    feestdag_naam: string | null;
-    code: AiosCode;
-    naam: string;
-    start_tijd: string;
-    eind_tijd: string;
-    blok_id: string | null;
-    blok_soort: BlokSoort | null;
-    blok_vorm: BlokVorm | null;
-    blok_start: string | null;
-    blok_eind: string | null;
-    level: Niveau | null;
-    bron: Bron | null;
-  }>;
+              b.id AS blok_id, b.soort AS blok_soort, b.vorm AS blok_vorm, b.start_datum AS blok_start, b.eind_datum AS blok_eind`;
+
+/** The rows of the diensten (one per dienst, in order) as days, each dienst with the mark `markVan` gives it. */
+function dagenUit(rows: DienstRij[], markVan: (slotId: string) => { level: Niveau | null; bron: Bron | null } | undefined): AiosVoorkeurDag[] {
   const dagen: AiosVoorkeurDag[] = [];
   for (const r of rows) {
     let dag = dagen[dagen.length - 1];
@@ -110,6 +99,7 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
       };
       dagen.push(dag);
     }
+    const mark = markVan(r.slot_id);
     dag.diensten.push({
       slot_id: r.slot_id,
       code: r.code,
@@ -121,17 +111,93 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
           ? { id: r.blok_id, soort: r.blok_soort, vorm: r.blok_vorm, start_datum: r.blok_start, eind_datum: r.blok_eind }
           : null,
       // A row without a level (a cleared sync row) reads as no mark.
-      level: r.level ?? null,
-      bron: r.level ? r.bron : null,
+      level: mark?.level ?? null,
+      bron: mark?.level ? (mark.bron ?? null) : null,
     });
   }
   return dagen;
 }
 
+/** Every dienst of the period per day, with the person's mark on it. */
+export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosVoorkeurDag[] {
+  const rows = db
+    .prepare(
+      `SELECT ${DIENST_KOLOMMEN},
+              av.blocking_level AS level, av.source AS bron
+       FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
+       LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = ?
+       WHERE sl.period_id = ? AND st.code IS NOT NULL
+       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
+    )
+    .all(personId, periodId) as Array<DienstRij & { level: Niveau | null; bron: Bron | null }>;
+  const perDienst = new Map(rows.map((r) => [r.slot_id, { level: r.level, bron: r.bron }]));
+  return dagenUit(rows, (id) => perDienst.get(id));
+}
+
+/**
+ * Marks the diensten outside the AIOS's Geldig vanaf/tot (1.1.4): the solver never gives one there (hard rule 1),
+ * so the AIOS's own screen shows them as niet in dienst instead of open. For that screen only.
+ */
+export function markeerNietInDienst(personId: string, periodId: string, dagen: AiosVoorkeurDag[]): AiosVoorkeurDag[] {
+  for (const dag of dagen) {
+    const lid = isAiosLidOp(personId, periodId, dag.datum);
+    for (const d of dag.diensten) d.niet_in_dienst = !lid;
+  }
+  return dagen;
+}
+
+/** Whether the AIOS's membership of the period's pool holds `datum` (both ends inclusive). */
+export function isAiosLidOp(personId: string, periodId: string, datum: string): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+         WHERE sp.id = ? AND pm.person_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? LIMIT 1`
+      )
+      .get(periodId, personId, datum, datum)
+  );
+}
+
+/**
+ * The same days for several people at once: the diensten of the period are read once and their marks in one
+ * more query, instead of the whole period once per person (72 AIOS took 817 queries to build the solver's input).
+ * Gives each person exactly what loadAiosVoorkeurDagen(person, period) gives.
+ */
+export function loadAiosVoorkeurDagenVoor(personIds: string[], periodId: string): Map<string, AiosVoorkeurDag[]> {
+  const rows = db
+    .prepare(
+      `SELECT ${DIENST_KOLOMMEN}
+       FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
+       WHERE sl.period_id = ? AND st.code IS NOT NULL
+       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
+    )
+    .all(periodId) as DienstRij[];
+  const wie = new Set(personIds);
+  const marks = new Map<string, Map<string, { level: Niveau | null; bron: Bron | null }>>();
+  for (const r of db
+    .prepare(
+      `SELECT av.person_id, av.slot_id, av.blocking_level AS level, av.source AS bron
+       FROM dienstrooster_availability av JOIN dienstrooster_shift_slot sl ON sl.id = av.slot_id
+       WHERE sl.period_id = ?`
+    )
+    .all(periodId) as Array<{ person_id: string; slot_id: string; level: Niveau | null; bron: Bron | null }>) {
+    if (!wie.has(r.person_id)) continue;
+    let eigen = marks.get(r.person_id);
+    if (!eigen) marks.set(r.person_id, (eigen = new Map()));
+    eigen.set(r.slot_id, { level: r.level, bron: r.bron });
+  }
+  return new Map(personIds.map((id) => [id, dagenUit(rows, (slot) => marks.get(id)?.get(slot))]));
+}
+
 export function loadAiosWens(personId: string, periodId: string): AiosWens {
   const row = db
     .prepare(
-      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, opmerking
+      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot
        FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?`
     )
     .get(periodId, personId) as (Omit<AiosWens, 'vier_avonden' | 'vier_nachten' | 'twee_dagdiensten'> & {
@@ -192,6 +258,16 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
     .all(personId, slot.shift_block_id ?? slot.id) as Array<{ id: string; is_feestdag: number; level: Niveau | null; bron: Bron | null }>;
   const blok = targets.length > 1;
 
+  // Outside Geldig vanaf/tot nothing is rostered (hard rule 1, 1.1.4): no mark to give there. Clearing stays possible.
+  if (level !== null) {
+    const datums = db
+      .prepare(`SELECT datum FROM dienstrooster_shift_slot WHERE ${slot.shift_block_id ? 'shift_block_id = ?' : 'id = ?'}`)
+      .all(slot.shift_block_id ?? slot.id) as Array<{ datum: string }>;
+    if (datums.some((d) => !isAiosLidOp(personId, periodId, d.datum))) {
+      return weiger(409, 'NIET_IN_DIENST', 'Op deze dag ben je volgens Geldig vanaf en Geldig tot niet in dienst. Daar word je niet ingeroosterd.');
+    }
+  }
+
   if (level === 'ABSOLUUT' && targets.some((t) => t.is_feestdag)) {
     return weiger(
       409,
@@ -226,6 +302,9 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
   // it counts for the 50% rule. Clearing it brings the liever niet back.
   const eigen = targets.filter((t) => !t.level || t.bron === 'MANUAL' || (parttimeLieverNiet(t) && level !== null)).map((t) => t.id);
   db.transaction(() => {
+    // A toelichting left behind by a mark that went another way (an absence or a part-time day took its place)
+    // must not come back with this new mark.
+    ruimAiosRedenenOp(personId, periodId);
     if (level === null) {
       const del = db.prepare(`DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ? AND source = 'MANUAL'`);
       for (const id of eigen) del.run(personId, id);
@@ -239,6 +318,8 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
       const now = new Date().toISOString();
       for (const id of eigen) upsert.run(crypto.randomUUID(), personId, id, level, now);
     }
+    // A day that lost its mark takes its toelichting with it (lib/aiosReden.ts).
+    ruimAiosRedenenOp(personId, periodId);
     markeerBegonnen(personId, periodId);
   })();
   // A cleared dienst may be one a part-time day or an absence covers but
@@ -270,23 +351,17 @@ export function saveAiosWens(personId: string, period: AiosPeriode, input: unkno
   if (!('van' in inwerken)) return inwerken;
   const onderbreking = bereik(body.onderbreking_van, body.onderbreking_tot, 'de onderbreking');
   if (!('van' in onderbreking)) return onderbreking;
-  let opmerking: string | null = null;
-  if (body.opmerking !== undefined && body.opmerking !== null && !(typeof body.opmerking === 'string' && body.opmerking.trim() === '')) {
-    const check = validateSingleLine(body.opmerking, 'Algemene verzoeken', OPMERKING_MAX_LENGTH);
-    if (!check.valid) return weiger(400, 'INVALID_INPUT', check.message);
-    opmerking = check.value || null;
-  }
   db.transaction(() => {
     db.prepare(
       `INSERT INTO dienstrooster_aios_wens
          (id, period_id, person_id, vier_avonden, vier_nachten, twee_dagdiensten,
-          inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, opmerking, gewijzigd_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, gewijzigd_op)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(period_id, person_id) DO UPDATE SET
          vier_avonden = excluded.vier_avonden, vier_nachten = excluded.vier_nachten,
          twee_dagdiensten = excluded.twee_dagdiensten, inwerken_van = excluded.inwerken_van,
          inwerken_tot = excluded.inwerken_tot, onderbreking_van = excluded.onderbreking_van,
-         onderbreking_tot = excluded.onderbreking_tot, opmerking = excluded.opmerking,
+         onderbreking_tot = excluded.onderbreking_tot,
          gewijzigd_op = excluded.gewijzigd_op`
     ).run(
       crypto.randomUUID(),
@@ -299,7 +374,6 @@ export function saveAiosWens(personId: string, period: AiosPeriode, input: unkno
       inwerken.tot,
       onderbreking.van,
       onderbreking.tot,
-      opmerking,
       new Date().toISOString()
     );
     markeerBegonnen(personId, period.id);

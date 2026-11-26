@@ -53,6 +53,8 @@ export interface World {
   swap: string;
   // An AIOS swap (lib/aiosRuilen.ts), x asking y.
   ruil: string;
+  // A personal link of x for the period (the beheerder's list of links).
+  link: string;
   absence: string;
   pattern: string;
   notice: string;
@@ -124,6 +126,12 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
   };
   const x = participant('x');
   const y = participant('y');
+  const link = insert('dienstrooster_person_access_link', {
+    person_id: x,
+    token_hash: crypto.randomBytes(32).toString('hex'),
+    geldt_voor_periode_id: period,
+    aangemaakt_op: now,
+  });
   const membership = insert('dienstrooster_pool_membership', { person_id: x, pool_id: pool, deelnamefactor: 1, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' });
   insert('dienstrooster_pool_membership', { person_id: y, pool_id: pool, deelnamefactor: 1, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' });
   // Monday 3 March for x, Monday 10 March for y: 7 days apart, so the window of 1 holds.
@@ -163,6 +171,30 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     aangemaakt_door: planner,
     aangemaakt_op: now,
   });
+  // One undo pending for the roster and one for the pool's members, so that the undo routes reach their dienst
+  // guard instead of answering "nothing to undo" whatever the guard does. Created a day ahead: the window of two
+  // minutes would otherwise pass during a long test file, and the routes would again answer for lack of a row.
+  const voorUitgang = new Date(Date.now() + 86_400_000).toISOString().slice(0, 19).replace('T', ' ');
+  insert('dienstrooster_pending_undo', {
+    scope: 'PERIOD_ASSIGNMENT',
+    scope_id: period,
+    action_type: 'ASSIGN',
+    payload_json: JSON.stringify({ assignment_id: assignment, person_id: x, slot_id: slots[0] }),
+    label: 'toegewezen',
+    onderdeel: 'ROOSTER',
+    actor_id: planner,
+    aangemaakt_op: voorUitgang,
+  });
+  insert('dienstrooster_pending_undo', {
+    scope: 'POOL_MEMBERSHIP',
+    scope_id: pool,
+    action_type: 'MEMBERSHIP_DELETE',
+    payload_json: JSON.stringify({ person_id: y, pool_id: pool, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' }),
+    label: 'verwijderd uit de pool',
+    onderdeel: 'ROOSTER',
+    actor_id: planner,
+    aangemaakt_op: voorUitgang,
+  });
   return {
     dienst,
     planner,
@@ -178,6 +210,7 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     assignment,
     swap,
     ruil,
+    link,
     absence,
     pattern,
     notice,
@@ -212,6 +245,10 @@ export function fill(path: string, w: World): { url: string; params: Record<stri
         return w.swap;
       case 'ruilId':
         return w.ruil;
+      case 'linkId':
+        return w.link;
+      case 'personId':
+        return w.x;
       case 'absenceId':
         return w.absence;
       case 'patternId':
@@ -279,6 +316,23 @@ export function fingerprint(w: World): string {
     q('SELECT * FROM dienstrooster_parttime_pattern WHERE person_id = ? ORDER BY id', w.x),
     q('SELECT * FROM dienstrooster_notification WHERE person_id IN (?, ?) ORDER BY id', w.x, w.y),
     q('SELECT id, codenaam, actief, sessie_versie FROM dienstrooster_person WHERE id IN (?, ?) ORDER BY id', w.x, w.y),
+    // What the AIOS keeps with a period, and what both keep around one (0.106.0: these were not in the fingerprint,
+    // so a write there by the other dienst would not have shown).
+    q('SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_wens WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_reden WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_doel WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_periode WHERE period_id = ?', w.period),
+    // 0.111.0: these three were not in the fingerprint either.
+    q('SELECT * FROM dienstrooster_aios_blokkeuze WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_generatie WHERE period_id = ?', w.period),
+    q('SELECT * FROM dienstrooster_aios_beginstand WHERE pool_id = ? ORDER BY id', w.pool),
+    q('SELECT * FROM dienstrooster_shift_block WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_holiday_history WHERE person_id IN (?, ?) ORDER BY id', w.x, w.y),
+    q('SELECT id, scope, scope_id, action_type, payload_json FROM dienstrooster_pending_undo WHERE scope_id IN (?, ?) ORDER BY id', w.period, w.pool),
+    q('SELECT * FROM dienstrooster_mail_queue WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_mail_queue WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_audit_log WHERE entiteit_id IN (?, ?, ?, ?) ORDER BY id', w.period, w.pool, w.x, w.y),
   ]);
 }
 

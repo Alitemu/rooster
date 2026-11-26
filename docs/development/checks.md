@@ -1,8 +1,28 @@
 # Checks: browser checks, mutations, schema drift
 
+Which of these to run for which change, and in what order, is in
+docs/teststrategie.md (Dutch, for the planner and the operator).
+
+The mutation runner puts the source back when it is stopped (SIGINT, SIGTERM,
+SIGHUP, a crash) and keeps a copy of each file it mutates in
+`.mutation-backup/` (not in git) for a kill it cannot catch: the next run
+restores from it first. `--droog` also checks that every test filter names
+a file. The replacement text is passed as a function, so `$'` in it is not
+a JavaScript replacement pattern (a mutation with one broke the file it
+meant to break differently).
+
 Moved out of CLAUDE.md to keep the context of every session small; the rules
 themselves stay there. Read this when working on what it covers. Code comments
 that say "CLAUDE.md, ..." point to a section that now lives in docs/development/.
+
+**The Caddy check** (deployConfig.test.ts) validates the Caddyfile inside
+docker-compose.yml with a real Caddy (`CADDY_BIN`, or caddy on the PATH). Without
+one it skips and prints a warning. Until 1.1.1 nothing set `REQUIRE_CADDY=true`,
+so it skipped everywhere, GitHub included. Since then the test-app job of
+"Bouwen (test)" (.github/workflows/images.yml) downloads a pinned Caddy, checks
+its sha512 and runs vitest with `REQUIRE_CADDY=true`: a missing Caddy or a
+Caddyfile Caddy refuses fails the build. Locally it still skips without a Caddy;
+deployConfig.test.ts holds that the workflow keeps doing it.
 
 **Browser-level checks** need a seeded database, both solvers and the app
 already running (`npm run seed`, `uvicorn main:app --port 8000` from
@@ -26,9 +46,18 @@ opens a "choose a new password" session (see Authentication):
   ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
   broken, nobody past their streefbereik).
 - `node scripts/ui-check.mjs` - the two screens people use most.
+- The calendar of the seed, the e2e fixtures, full-check and ui-check
+  moves with the real date (scripts/demoKalender.mjs): they were written
+  for Monday 4 January 2027 and a period, deadline or shift in the past
+  fails them on the calendar alone. Nothing moves while that period starts
+  at least six weeks ahead, then whole weeks (the weekday stays).
+  `DEMO_SHIFT_WEEKS=60` forces a shift, to try them before the date makes
+  it necessary. scripts/demoKalender.test.ts holds the rule and bans a fixed
+  2026 or 2027 date in these files.
 - `node scripts/scenario-check.mjs` - the planner's own case end to end:
-  15 people, a fellow with a part-time Monday, 2026-12-28 to 2027-09-05
-  (ISO week 53 and the year boundary), opened with the wizard's
+  15 people, a fellow with a part-time Monday, 36 weeks from the Monday of
+  ISO week 53 of the next year that has one, at least four weeks ahead (28
+  December 2026, then 27 December 2032, found with lib/holidays.ts), opened with the wizard's
   suggested streefbereik, generated with all four methods at windows 0-2
   (SCENARIO_MODES, SCENARIO_WINDOWS, SCENARIO_TIME, default the dialog's
   120 s): nothing empty, no rule broken, then "Rooster verwijderen" and
@@ -68,6 +97,14 @@ test_gedeeld.py there and lib/aiosRegels.test.ts here check the same
 rosters (tests/fixtures/aios-regels.json): the solver's check and the
 app's copy of the AIOS's hard rules must find the same.
 
+`node scripts/mutation-check.mjs --droog` runs no test: it only checks that
+every `find` is still in its file, and once (a find that occurs twice
+mutated only the first; say `alles: true` to mutate every occurrence).
+Fast, so worth running after changing a file a mutation names. Since
+0.111.0 a mutation counts as caught only when a test fails: a timeout, a
+syntax or import error that fails the suite while loading, or a crash is
+a broken mutation and is reported as such.
+
 Which mutations a release runs (the user's choice in October 2026; until
 0.81.0 every release ran all of them, about 12 minutes): a 0.x.0 release
 runs `node scripts/mutation-check.mjs --sinds v<the previous 0.x.0>`, the
@@ -82,10 +119,13 @@ of its mutations.
 The solver the browser checks talk to should run the OR-Tools version
 of solver/requirements.txt (9.8, the image's): another version searches
 differently: in the planner's scenario at window 2 and 120 seconds
-lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Two sweeps run with npm
+lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Three sweeps run with npm
 test: app/api/auditCoverage.test.ts (every planner route that changes data
-writes the audit log or states why not) and app/dutchStyle.test.ts (no
-joining dash, no comma before en/of in user-facing text).
+writes the audit log or states why not), app/dutchStyle.test.ts (no
+joining dash, no comma before en/of in user-facing text) and
+app/buttonContrast.test.ts (white text on a `bg-` or `hover:bg-` colour
+reaches 4.5 to 1, measured with the palette of tailwind.config.ts; take
+the 700 of green, amber or emerald, not the 600, and the 800 on hover).
 
 `node scripts/schema-drift.mjs` needs nothing running. It builds one
 database from the seed and one from the migrations and compares them
@@ -95,14 +135,34 @@ it is scripts/seed.ts - not db/migrations - that builds the schema, and
 the two drifting apart means production quietly runs a different one than
 every test does.
 
-`node scripts/upgrade-drift.mjs [commit...]` covers the other half: a
-production database was never built from nothing. It builds one with an
-older version's own seed (a git worktree; by default 0.2.0, 0.6.0, 0.8.1
-and 0.11.0), runs the current production start over it (seed.ts
---alleen-planner) and compares the result with a fresh database - every
-column, index, foreign key and CHECK constraint - and checks no row of the
-core tables was lost. Run it after adding a column; it needs the git
-history, not a shallow clone.
+The other half: a production database was never built from nothing.
+scripts/seed.upgradeOud.test.ts (1.6.1, in every `npx vitest run` and so in
+every build) loads the database of an older version from
+tests/fixtures/oude-databases/*.sql (0.2.0, 0.11.0, and 1.0.1 and 1.3.0, which
+an installation on a ward has run), runs the current production start over it
+(seed.ts --alleen-planner) and compares the result with a fresh database -
+every column, index, foreign key and CHECK constraint - and checks no row of
+the core tables was lost (scripts/upgradeVorm.mjs).
+
+`node scripts/upgrade-drift.mjs [--schrijf] [version|commit...]` did this
+alone until then, by building an old version with its own seed in a git
+worktree. It ran with today's node_modules, so it has failed since 26 October
+2026, when a package every older version imports left (`speakeasy`), and
+nobody saw: it ran by hand only, after a schema change, and needs the full
+history. It stays as the tool that writes a fixture (`--schrijf 1.3.0`; for a
+version before that day `npm install --no-save speakeasy@2` first and `npm ci`
+after). The lesson, the same as the Caddy check that skipped everywhere until
+1.1.1: a check that no build runs is gone within months.
+
+**The carry-over as a chain** is the end of scenario-check (1.6.1): its roster
+is published (with `confirmOverrides`, the scenario's roster has a few people
+just outside their bereik), one avonddienst is taken off someone inside their
+bereik as for an illness, the next period is opened, and that person has
+exactly "1 avonddienst in te halen van vorige periode" there, nobody who ended
+inside their bereik has a row, and nothing is booked against the old period.
+scripts/check-carryover-live.mjs did this on the seed and had been dead since
+the generation moved to the background (it read the roster from the POST's
+response); it is removed.
 
 Two things these get wrong easily, and both cost a day to diagnose:
 - **Assert on Dutch.** Every user-facing string is Dutch; a selector looking
