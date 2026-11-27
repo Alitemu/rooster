@@ -40,6 +40,10 @@ def test_everyone_the_same_percentage_to_their_fte():
     uit, _ = los_op(inp)
     assert not uit.leeg
     x, y, z = (_per(uit, n) for n in 'xyz')
+    # The share itself, not searched for, so it holds however busy the machine is (2.5.0: with the search alone a
+    # share that ignored the fte passed once, under load, when the roster found in 8 seconds happened to fit).
+    assert x.doel_punten == pytest.approx(z.doel_punten, abs=0.01)
+    assert x.doel_punten == pytest.approx(2 * y.doel_punten, abs=0.02)
     # 1.0 and 0.5 fte: twice the points, give or take one dienst.
     assert abs(x.punten - z.punten) <= 1.0
     assert abs(x.punten - 2 * y.punten) <= 2.0
