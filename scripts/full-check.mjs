@@ -302,8 +302,11 @@ async function main() {
       `${weekendDays} weekend days, ${unblockedWeekend} open without a marking, ${ownMarks} kept as they marked them`);
   const fellowSummary = await req('GET', `/api/planner/period/${period.id}/fellows`, { jar: planner });
   const wk = fellowSummary.json?.data?.weekend;
-  rec('…and the others\' weekend band goes up', fellowSummary.status === 200 &&
-      fellowSummary.json?.data?.fellows?.length === 1 && wk?.bereik?.[1] > wk?.bereik_zonder_fellows?.[1],
+  // 2.5.0: the period names its weekend band ([4, 5] above), and a named band stays as it is with fellows (the
+  // planner's choice: what someone present the whole period gets, literally). Until 2.5.0 it went up, here to [4, 6].
+  rec('…and the others\' configured weekend band stays as it is', fellowSummary.status === 200 &&
+      fellowSummary.json?.data?.fellows?.length === 1 &&
+      JSON.stringify(wk?.bereik) === JSON.stringify(wk?.bereik_zonder_fellows) && JSON.stringify(wk?.bereik) === '[4,5]',
       `${JSON.stringify(wk?.bereik_zonder_fellows)} → ${JSON.stringify(wk?.bereik)}`);
 
   // ---------- PLANNER MONITORING ----------
