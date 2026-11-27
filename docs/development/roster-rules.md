@@ -37,7 +37,14 @@ over.
   letterlijk", after being told weekend shifts can then stay empty: the
   generation dialog's bereik-tekort says so before generating). Until
   2.5.0 a named band was raised by everyone / the non-fellows with
-  floor/ceil, which made [1, 2] "1 tot en met 3". A fellow's own WEEKEND
+  floor/ceil, which made [1, 2] "1 tot en met 3". The usual case shows
+  the cost: the wizard suggests a weekend band for everyone, then someone
+  ticks fellow, and the others' maximums together are exactly the weekend
+  shifts (the scenario: 14 x 5 = 70). bereik-tekort says nothing (70 is
+  enough on paper), yet at window 2 a method can leave a weekend dienst
+  empty. Asked again with that in hand, the planner kept it: "het maken
+  van het rooster blijft handwerk", the Dienstdoende tab shows who is
+  short. scripts/scenario-check.mjs warns there instead of failing. A fellow's own WEEKEND
   band is `[0, released days]`, capped at the others' max, without the
   ledger (`fellowWeekendBand`).
   `computeMemberTargets` is the one per-person target (publication check,

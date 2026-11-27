@@ -188,6 +188,15 @@ rec('Period created', !!periodId, `status=${created.status}`);
 const capacity = await req('GET', `/api/periods/${periodId}/capacity?window_weeks=2&start_datum=${START}&eind_datum=${END}`, { jar: planner });
 const suggested = capacity.json?.data?.suggested_band;
 rec('The wizard suggests a streefbereik for 15 people', !!suggested, JSON.stringify(suggested));
+// Whether the non-fellows' weekend maximums together are exactly the weekend shifts (2.5.0): the configured band
+// stays as it is with a fellow, so there is no room left.
+function weekendZonderRuimte() {
+  const weekend = db
+    .prepare(`SELECT COUNT(*) n FROM dienstrooster_shift_slot s JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id WHERE s.period_id = ? AND st.teller = 'WEEKEND'`)
+    .get(periodId).n;
+  const fellows = db.prepare('SELECT COUNT(*) n FROM dienstrooster_period_fellow WHERE period_id = ?').get(periodId).n;
+  return fellows > 0 && Array.isArray(suggested?.WEEKEND) && (people.length - fellows) * suggested.WEEKEND[1] <= weekend;
+}
 const opened = await req('POST', `/api/periods/${periodId}/open`, {
   jar: planner,
   body: {
@@ -279,10 +288,17 @@ for (const objectiveMode of MODES) {
     // dienst another method fills (audit 9: Pinksterzondag at window 2).
     // "Herhaalplanner" runs 3 attempts here, where the dialog runs up to
     // 100: at window 2 those 3 may leave a dienst too (audit 14).
-    (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) ? warn : rec)(
+    // 2.5.0: the weekend band the wizard suggested for all 15 stays as it is now that one is a fellow (the planner's
+    // choice, "altijd letterlijk"): the 14 others together may do exactly as many weekend shifts as there are, with no
+    // room at all. At window 2 a method may then leave a weekend dienst empty (lexicographic left 2 in the 2.5.0 gate);
+    // the planner sees who is short and fills it by hand ("het maken van het rooster blijft handwerk"). So there a
+    // weekend dienst left empty is a warning, and anything else empty still fails.
+    const zonderRuimte = weekendZonderRuimte() && windowWeeks >= 2;
+    const alleenWeekend = r.unfilled_slots.every((u) => u.teller === 'WEEKEND');
+    (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) || (zonderRuimte && alleenWeekend) ? warn : rec)(
       `${label}: every dienst filled`,
       r.unfilled_slots.length === 0,
-      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}`
+      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}${zonderRuimte && r.unfilled_slots.length > 0 && alleenWeekend ? ', alleen weekenddiensten: het weekendbereik laat geen ruimte' : ''}`
     );
     rec(`${label}: the explanation never claims more than is empty`, tekort <= r.unfilled_slots.length, `tekort ${tekort}`);
 
