@@ -1129,6 +1129,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Aantal minuten (1 tot {MAX_ZOEKTIJD_MINUTEN})
                       </span>
                       <input
+                        aria-label={`Aantal minuten (1 tot ${MAX_ZOEKTIJD_MINUTEN})`}
                         type="number"
                         inputMode="numeric"
                         min={1}
