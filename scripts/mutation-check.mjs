@@ -6329,6 +6329,27 @@ const MUTATIONS = [
     tests: ["app/api/aios/aiosGenereren"],
   },
   {
+    name: "2.4.0: aios eerlijk: the dagdiensten show the weekend evenings' share in brackets",
+    file: "lib/aiosRooster.ts",
+    find: "dagdiensten: bereik(d?.doel_dagen),",
+    replace: "dagdiensten: bereik(d?.doel_weekendavonden),",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "2.4.0: aios eerlijk: the feestdagen show the nights' share in brackets",
+    file: "lib/aiosRooster.ts",
+    find: "feestdagdiensten: bereik(d?.doel_feestdagen),",
+    replace: "feestdagdiensten: bereik(d?.doel_nachten),",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "2.4.0: aios eerlijk: the uitloopdiensten show the week evenings' share in brackets",
+    file: "lib/aiosRooster.ts",
+    find: "uitloopdiensten: bereik(d?.doel_uitloopdiensten),",
+    replace: "uitloopdiensten: bereik(d?.doel_weekavonden),",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
     name: "aios eerlijk: the uitloop share is not stored",
     file: "lib/aiosGenereren.ts",
     find: "a.doel_weekavonden ?? null, a.doel_uitloopdiensten ?? null);",

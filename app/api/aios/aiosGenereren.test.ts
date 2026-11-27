@@ -386,6 +386,42 @@ describe('making the AIOS roster', () => {
     expect(x.eerlijk.nachten).toEqual({ van: 2, tot: 3 });
   });
 
+  it('every [value] under a bar is the share of that soort itself, never of another (2.4.0)', async () => {
+    // A different range for every soort, so a soort that reads another's share shows the wrong value here.
+    const doelen = {
+      doel_punten: 16.5,
+      doel_nachten: 7.58,
+      doel_dagen: 2.42,
+      doel_weekendavonden: 4,
+      doel_weekavonden: 5.17,
+      doel_uitloopdiensten: 9.3,
+      doel_feestdagdiensten: 1.4,
+    };
+    const eigen: Record<string, number> = {
+      nachten: doelen.doel_nachten,
+      dagdiensten: doelen.doel_dagen,
+      weekendavonden: doelen.doel_weekendavonden,
+      weekavonden: doelen.doel_weekavonden,
+      uitloopdiensten: doelen.doel_uitloopdiensten,
+      feestdagdiensten: doelen.doel_feestdagdiensten,
+    };
+    antwoordVan = (invoer) => {
+      const g = gewoon(invoer);
+      (g.body as any).per_aios = [{ aios_id: w.x, ...doelen }];
+      return g;
+    };
+    await klaar(await maak());
+    const x = (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.per_aios.find(
+      (a: any) => a.person_id === w.x
+    );
+    // Worked out here, apart from lib/aiosEerlijk.ts: the whole numbers either side of the share.
+    for (const [soort, doel] of Object.entries(eigen)) {
+      expect(x.eerlijk[soort], soort).toEqual({ van: Math.floor(doel), tot: Math.ceil(doel) });
+    }
+    const bereiken = Object.values(x.eerlijk).map((b: any) => `${b.van}-${b.tot}`);
+    expect(new Set(bereiken).size).toBe(6);
+  });
+
   it('one generation at a time, and the roster stays as it is meanwhile', async () => {
     antwoordVan = (i) => ({ ...gewoon(i), vertraging: 300 });
     const job = await maak();

@@ -181,11 +181,59 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(dienstdoende.getByTestId('dienstdoende-feestdagdiensten').getByTestId('eerlijk-pijl')).toHaveCount(0);
   await expect(dienstdoende.getByTestId('eerlijk-cel')).toHaveCount(8);
   const regels = await dienstdoende.getByTestId('eerlijk-verschil').allTextContents();
-  for (const r of regels) expect(r).toMatch(/^\d+ (nachten?|dagdiensten?|weekendavond(en)?|weekavond(en)?|uitloopdiensten?|feestdagdiensten?) (te veel|tekort)$/);
+  for (const r of regels) expect(r).toMatch(/^\d+ (nacht(en)?|dagdienst(en)?|weekendavond(en)?|weekavond(en)?|uitloopdienst(en)?|feestdagdienst(en)?) (te veel|tekort)$/);
   const goed = await dienstdoende.getByTestId('eerlijk-goed').count();
   const metVerschil = await dienstdoende.getByTestId('eerlijk-cel').filter({ has: page.getByTestId('eerlijk-verschil') }).count();
   expect(goed + metVerschil).toBe(8);
   await expect(dienstdoende.getByTestId('eerlijk-pijl')).toHaveCount(regels.filter((r) => !/feestdagdienst/.test(r)).length);
+  // The [values] under the bars are the solver's own share as stored, worked out here apart from the app (2.4.0):
+  // per AIOS and per soort the whole numbers either side of the share in hundredths, none below none. And the box
+  // agrees with the arrow: a bar ends inside its box exactly where the cell has no arrow.
+  const kolom: Record<string, string> = {
+    nachten: 'doel_nachten',
+    dagdiensten: 'doel_dagen',
+    weekendavonden: 'doel_weekendavonden',
+    weekavonden: 'doel_weekavonden',
+    uitloopdiensten: 'doel_uitloopdiensten',
+    feestdagdiensten: 'doel_feestdagen',
+  };
+  const doelen = db
+    .prepare(
+      `SELECT p.codenaam, d.* FROM dienstrooster_aios_doel d JOIN dienstrooster_person p ON p.id = d.person_id WHERE d.period_id = ?`
+    )
+    .all(ids.period) as Array<Record<string, number | string | null>>;
+  expect(doelen).toHaveLength(8);
+  const verwachtBereik = (doel: number) => {
+    const d = Math.round(doel * 100) / 100;
+    const van = Math.max(0, Math.floor(d));
+    const tot = Math.max(0, Math.ceil(d));
+    return { van, tot, tekst: van === tot ? `[${van}]` : `[${van} of ${tot}]` };
+  };
+  let gecontroleerd = 0;
+  for (const rij of await dienstdoende.locator('tbody tr').all()) {
+    const codenaam = (await rij.locator('td').first().textContent())!.trim();
+    const doel = doelen.find((d) => d.codenaam === codenaam)!;
+    expect(doel).toBeDefined();
+    for (const [soort, veld] of Object.entries(kolom)) {
+      const cel = rij.getByTestId(`dienstdoende-${soort}`);
+      const b = verwachtBereik(doel[veld] as number);
+      await expect(cel.getByTestId('eerlijk-onder')).toHaveText(b.tekst);
+      // The number beside the bar is what the AIOS got of that soort; the screen reader's words say the same range.
+      const aantal = Number((await cel.locator('span.tabular-nums').first().textContent())!.trim());
+      await expect(cel.locator('.sr-only')).toContainText(`eerlijk is ${b.tekst.slice(1, -1)}.`);
+      if (soort === 'feestdagdiensten') continue;
+      const maat = await cel.evaluate((el) => {
+        const balk = el.querySelector('div.relative > div:first-child') as HTMLElement;
+        const vak = el.querySelector('[data-testid="eerlijk-vlak"]') as HTMLElement;
+        return { eind: parseFloat(balk.style.width), van: parseFloat(vak.style.left), breedte: parseFloat(vak.style.width) };
+      });
+      const binnen = maat.van - 0.01 <= maat.eind && maat.eind <= maat.van + maat.breedte + 0.01;
+      expect(binnen).toBe(b.van <= aantal && aantal <= b.tot);
+      await expect(cel.getByTestId('eerlijk-pijl')).toHaveCount(binnen ? 0 : 1);
+      gecontroleerd++;
+    }
+  }
+  expect(gecontroleerd).toBe(8 * 5);
   await expect(dienstdoende.getByTestId('dienstdoende-nachten').first()).toContainText(/\d+ (nacht|nachten), eerlijk is \d+( of \d+)?\./);
   await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');
