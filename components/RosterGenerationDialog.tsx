@@ -16,7 +16,17 @@ import { withBasePath } from '@/lib/basePath';
 import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
-import { opnieuwKnopTekst, opnieuwUitleg, STANDAARD_ZOEKTIJD_SECONDEN, volgendeZoektijd, zoektijdWoorden } from '@/lib/solverZoektijd';
+import {
+  EIGEN_ZOEKTIJD,
+  gekozenZoektijd,
+  MAX_ZOEKTIJD_MINUTEN,
+  opnieuwKnopTekst,
+  opnieuwUitleg,
+  STANDAARD_ZOEKTIJD_SECONDEN,
+  volgendeZoektijd,
+  ZOEKTIJD_KEUZES,
+  zoektijdWoorden,
+} from '@/lib/solverZoektijd';
 
 const POLL_INTERVAL_MS = 2000;
 // A dropped poll just means "ask again in a moment" - the generation itself
@@ -210,6 +220,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // loading message can name it before the result comes back.
   const [lastTimeLimitSeconds, setLastTimeLimitSeconds] = useState<number | null>(null);
   const [pendingTimeLimitSeconds, setPendingTimeLimitSeconds] = useState<number | null>(null);
+  // How long the solver may search, chosen before "Genereren" (2.6.0, as the AIOS's): one of the choices or
+  // "Zelf kiezen" with a number of minutes (lib/solverZoektijd.ts).
+  const [zoektijdKeuze, setZoektijdKeuze] = useState<string>(String(STANDAARD_ZOEKTIJD_SECONDEN));
+  const [eigenMinuten, setEigenMinuten] = useState('');
   // True while polling is retrying after a network-level failure (not an
   // application error) - shown so a planner sees *why* the wait continues
   // instead of the dialog looking frozen during a brief connection hiccup.
@@ -578,9 +592,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // and leave the generate call's result with nowhere to land.
   const dismissBackdrop = useDialogDismiss(isOpen, handleClose, !loading);
 
-  // The step-up offered after a FEASIBLE result: 300s (the default, tracked
-  // as null) -> 600s -> 1800s -> no further offer, the steps the planner
-  // asked for. Each is a new run from the start (lib/solverZoektijd.ts).
+  // The step-up offered after a FEASIBLE result: the next of 600s, 1800s and
+  // 3600s above the time just used, then no further offer (2.6.0). Each is a
+  // new run from the start (lib/solverZoektijd.ts).
   const nextTimeLimitSeconds = volgendeZoektijd(lastTimeLimitSeconds);
 
   // Catches the mistake client-side before a round trip - the server
@@ -602,7 +616,12 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     .map((s) => parseFloat(s.trim()))
     .filter((n) => Number.isFinite(n) && n > 0);
   const tiersInvalid = parsedBandDeviationPenalty.length === 0;
-  const formInvalid = bandInvalid || tiersInvalid;
+  // The two ways that run CP-SAT once take the chosen search time; Herhaalplanner and Willekeurig keep their own.
+  const zoektijdTelt = ruleset?.objectiveMode === 'weighted' || ruleset?.objectiveMode === 'lexicographic';
+  const gekozen = gekozenZoektijd(zoektijdKeuze, eigenMinuten);
+  const zoektijdOngeldig = zoektijdTelt && gekozen === null;
+  const formInvalid = bandInvalid || tiersInvalid || zoektijdOngeldig;
+  const genereer = () => handleGenerate(zoektijdTelt && gekozen !== null ? gekozen : undefined);
 
   const handleBandDeviationPenaltyChange = (text: string) => {
     setBandDeviationPenaltyText(text);
@@ -1087,10 +1106,47 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <li>Deeltijdpatronen afdwingen</li>
                 <li>Niemand twee diensten binnen het venster geven</li>
               </ul>
-              <p className="text-xs text-neutral-500 pt-2">
-                De solver zoekt hoogstens 5 minuten. Is hij dan nog niet klaar, dan krijg je het
-                beste rooster dat hij tot dan vond. Daarna kun je het rooster opnieuw laten maken
-                met 10 of 30 minuten zoektijd. De solver begint dan helemaal opnieuw.
+              {zoektijdTelt && (
+                <div className="flex flex-wrap items-end gap-3 pt-2" data-testid="zoektijd-keuze">
+                  <label className="text-sm text-neutral-800">
+                    <span className="block text-xs font-medium text-neutral-600 mb-1">Hoe lang zoeken</span>
+                    <select
+                      value={zoektijdKeuze}
+                      onChange={(e) => setZoektijdKeuze(e.target.value)}
+                      className="px-2 py-1 border rounded text-sm"
+                    >
+                      {ZOEKTIJD_KEUZES.map((s) => (
+                        <option key={s} value={String(s)}>
+                          {zoektijdWoorden(s)}
+                        </option>
+                      ))}
+                      <option value={EIGEN_ZOEKTIJD}>Zelf kiezen</option>
+                    </select>
+                  </label>
+                  {zoektijdKeuze === EIGEN_ZOEKTIJD && (
+                    <label className="text-sm text-neutral-800">
+                      <span className="block text-xs font-medium text-neutral-600 mb-1">
+                        Aantal minuten (1 tot {MAX_ZOEKTIJD_MINUTEN})
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={MAX_ZOEKTIJD_MINUTEN}
+                        step={1}
+                        value={eigenMinuten}
+                        onChange={(e) => setEigenMinuten(e.target.value)}
+                        className="w-24 px-2 py-1 border rounded text-sm"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-neutral-500 pt-2" data-testid="zoektijd-uitleg">
+                {zoektijdTelt
+                  ? `De solver zoekt hoogstens ${gekozen !== null ? zoektijdWoorden(gekozen) : 'de tijd die je kiest'}. Hoe langer hij zoekt, hoe eerlijker de verdeling. Is hij dan nog niet klaar, dan krijg je het beste rooster dat hij tot dan vond.`
+                  : 'De Herhaalplanner en de Gerandomiseerde planner bepalen zelf hoe lang ze zoeken.'}
+                {zoektijdOngeldig ? ` Vul een heel aantal minuten in, van 1 tot ${MAX_ZOEKTIJD_MINUTEN}.` : ''}
               </p>
             </div>
           )}
@@ -1300,7 +1356,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 </button>
               )}
               <button
-                onClick={() => handleGenerate()}
+                onClick={genereer}
                 disabled={loading || formInvalid}
                 title={formInvalid ? 'Los eerst de ongeldige instellingen hierboven op' : undefined}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
@@ -1330,7 +1386,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           {error && (
             <>
               <button
-                onClick={() => handleGenerate()}
+                onClick={genereer}
                 disabled={loading}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >

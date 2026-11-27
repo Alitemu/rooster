@@ -131,6 +131,11 @@ dus er gaat niets echt weg.
 - [ ] **C6a.** Klik bij de planner één keer op *Periode sluiten*. Je ziet vóór de
   tweede klik hoeveel deelnemers nog niet bevestigden en hoeveel nog niets
   invulden.
+- [ ] **C6b.** Open *Rooster genereren met solver* en kies de methode *Gewogen*. Je
+  ziet: *Hoe lang zoeken* met 10 minuten, 15 minuten, 30 minuten en *Zelf kiezen*.
+  10 minuten staat al gekozen. Kies *Zelf kiezen* en vul 61 in: *Genereren* kan
+  niet en er staat dat het van 1 tot 60 moet. Bij de Herhaalplanner staat de keuze
+  er niet.
 - [ ] **C7.** *Rooster opnieuw genereren met solver*. Je ziet: geen lege
   diensten, geen dienst op een geblokkeerde dag, niemand twee diensten in één
   week. Onder het resultaat staat het streefbereik in woorden ("avond 2 of 3

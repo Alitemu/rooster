@@ -10,10 +10,10 @@ import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { POST as generateRoster } from './route';
 
 /**
- * How long the achterwacht's solver may search (0.905.0, lib/solverZoektijd.ts): a first run of CP-SAT 5 minutes
- * (on the planner's period 2 minutes left a shift empty, 5 filled them all), a chosen time up to 30 minutes as it
- * is, more refused before the solver is asked. Herhaalplanner repeats a solve up to 100 times: it keeps the solver's
- * own time per attempt, or 100 attempts of 5 minutes would be eight hours. Against a fake solver that records what
+ * How long the achterwacht's solver may search (lib/solverZoektijd.ts): without a choice 10 minutes (2.6.0; 5 from
+ * 0.905.0, when 2 minutes had left a shift empty), a chosen time up to 60 minutes as it is (2.6.0; 30 until then),
+ * more refused before the solver is asked. Herhaalplanner repeats a solve up to 100 times: it keeps the solver's
+ * own time per attempt, or 100 attempts of 10 minutes would be seventeen hours. Against a fake solver that records what
  * it is sent.
  */
 
@@ -125,24 +125,25 @@ afterAll(async () => {
   }
 });
 
-describe('how long the achterwacht solver searches (0.905.0)', () => {
-  it('a first run of CP-SAT searches 5 minutes, also without a body', async () => {
+describe('how long the achterwacht solver searches (2.6.0)', () => {
+  it('a run of CP-SAT without a choice searches 10 minutes, also without a body', async () => {
     for (const period of [ids.lexicografisch, ids.gewogen]) {
       const [a] = await genereer(period);
-      expect(a.time_limit_seconds).toBe(300);
+      expect(a.time_limit_seconds).toBe(600);
       const [b] = await genereer(period, {});
-      expect(b.time_limit_seconds).toBe(300);
+      expect(b.time_limit_seconds).toBe(600);
     }
   });
 
-  it('10 and 30 minutes go to the solver as asked; more than 30 is refused before it is asked', async () => {
-    expect((await genereer(ids.lexicografisch, { time_limit_seconds: 600 }))[0].time_limit_seconds).toBe(600);
-    expect((await genereer(ids.lexicografisch, { time_limit_seconds: 1800 }))[0].time_limit_seconds).toBe(1800);
+  it('the times on offer and up to 60 minutes go to the solver as asked; more than 60 is refused before it is asked', async () => {
+    for (const tijd of [600, 900, 1800, 2700, 3600]) {
+      expect((await genereer(ids.lexicografisch, { time_limit_seconds: tijd }))[0].time_limit_seconds).toBe(tijd);
+    }
     const voor = ontvangen.length;
-    for (const fout of [1801, 0, 30.5, '300']) {
+    for (const fout of [3601, 0, 30.5, '300']) {
       const res = await generateRoster(request(ids.lexicografisch, { time_limit_seconds: fout }), { params: Promise.resolve({ id: ids.lexicografisch }) });
       expect(res.status, String(fout)).toBe(400);
-      expect((await res.json()).error).toBe('Tijdslimiet moet een geheel getal tussen 1 en 1800 seconden zijn');
+      expect((await res.json()).error).toBe('Tijdslimiet moet een geheel getal tussen 1 en 3600 seconden zijn');
     }
     expect(ontvangen).toHaveLength(voor);
   });

@@ -79,16 +79,18 @@ const eq = (a, b) => a === b;
  * asserting against `undefined` ever since, and every check that depended
  * on a generated roster failed with it.
  */
-async function generateRoster(periodId, jar, body) {
+async function generateRoster(periodId, jar, body = { time_limit_seconds: 300 }) {
+  // 5 minutes, the dialog's first run until 2.6.0: its default is 10 now (lib/solverZoektijd.ts), and these checks
+  // need a roster, not the best one.
   const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body });
   if (start.status !== 200 || !start.json?.data?.job_id) {
     return { ok: false, detail: `start status=${start.status}`, startStatus: start.status };
   }
 
   const jobId = start.json.data.job_id;
-  // The solver's first search takes up to 5 minutes (lib/solverZoektijd.ts
-  // STANDAARD_ZOEKTIJD_SECONDEN), all of it when it cannot prove the roster
-  // best: waiting exactly 5 minutes timed out on a solve of 301 seconds.
+  // The search takes up to the 5 minutes asked above, all of it when it
+  // cannot prove the roster best: waiting exactly 5 minutes timed out on a
+  // solve of 301 seconds.
   const WACHT_MINUTEN = 8;
   const deadline = Date.now() + WACHT_MINUTEN * 60 * 1000;
   while (Date.now() < deadline) {

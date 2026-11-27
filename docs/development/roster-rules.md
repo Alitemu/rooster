@@ -393,6 +393,17 @@ Audit 0.94.0 on top of that:
   even. Lexicographic is what the wizard opens every new period with
   (objectiveMode in the frozen ruleset); weighted is the default only for
   a period frozen before that field existed.
+- **Search time chosen first (2.6.0, the planner's choice "zoals bij de
+  aios"):** the dialog has the AIOS's picker: 10 minutes (the default, also
+  what the route sends without a body), 15 or 30, or "Zelf kiezen" with a
+  whole number of minutes from 1 to 60 (`gekozenZoektijd`; "Genereren"
+  waits on anything else). Only for weighted and lexicographic: Herhaalplanner
+  and Willekeurig keep their own. After a FEASIBLE result the button offers
+  the next of 10, 30 and 60 minutes above the time used. solver/main.py
+  takes up to 3600 seconds (the planner's choice again, the one change to
+  the solver; its model is as it was). full-check asks 5 minutes for its two
+  generations, as before. tests/e2e/zoektijd-kiezen.e2e.ts checks the picker
+  and what it sends.
 - **Search time (0.905.0, lib/solverZoektijd.ts):** a first run of CP-SAT
   (weighted, lexicographic) searches 5 minutes, sent by the route when the
   dialog asks for none. On the planner's own period (October 2026) 2

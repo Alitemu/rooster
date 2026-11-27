@@ -116,11 +116,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const periodId = params.id;
     const now = new Date().toISOString();
 
-    // Optional body: { time_limit_seconds } lets the planner ask for a
-    // longer CP-SAT search after a first attempt comes back FEASIBLE
-    // rather than OPTIMAL (see RosterGenerationDialog's "langer proberen"
-    // option). No body at all (the common case) is the first run's 5
-    // minutes (lib/solverZoektijd.ts). Clamped to the same [1, 1800] range the solver
+    // Optional body: { time_limit_seconds }, the search time the planner
+    // chose before generating, or the longer one after a result comes back
+    // FEASIBLE rather than OPTIMAL (RosterGenerationDialog). No body at all
+    // is the default 10 minutes (lib/solverZoektijd.ts). Clamped to the same [1, 3600] range the solver
     // enforces so an out-of-range value fails fast here with a clear
     // message instead of a generic solver error.
     let timeLimitSeconds: number | undefined;
