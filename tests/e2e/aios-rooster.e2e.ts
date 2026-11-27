@@ -171,13 +171,21 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(dienstdoende.getByRole('columnheader', { name: 'Punten' })).toBeVisible();
   await expect(dienstdoende.getByRole('columnheader', { name: 'Percentage' })).toBeVisible();
   await expect(dienstdoende.getByTestId('dienstdoende-punten')).toHaveCount(8);
-  // The fair range of every soort behind each bar (0.903.0): 8 AIOS, 6 soorten, the solver's own share. The summary
-  // names exactly the cells with an arrow, and a screen reader hears the cell in words.
-  await expect(dienstdoende.getByTestId('eerlijk-vlak')).toHaveCount(8 * 6);
-  const samenvatting = dienstdoende.getByTestId('eerlijk-samenvatting');
-  await expect(samenvatting).toHaveText(/^(Iedereen heeft van elke soort een eerlijk aantal diensten\.|\d+ AIOS (heeft|hebben) van een soort meer of minder diensten dan eerlijk:.*)$/s);
-  const verschillen = (await samenvatting.locator('li').allTextContents()).reduce((n, r) => n + r.split('; ').length, 0);
-  await expect(dienstdoende.getByTestId('eerlijk-pijl')).toHaveCount(verschillen);
+  // The fair range of every soort (0.903.0), in the achterwacht's look since 2.4.0: in brackets under every bar, a
+  // dashed box over it but for the feestdagen (8 AIOS, 5 soorten), red arrows, and the last column says per AIOS what
+  // is outside it or "goed". The column names exactly the soorten with an arrow, plus the feestdagen, which have none.
+  await expect(dienstdoende.getByTestId('aios-dienstdoende-uitleg')).toContainText('Onder elke balk staat het [eerlijke aantal] van die AIOS');
+  await expect(dienstdoende.getByTestId('eerlijk-onder')).toHaveCount(8 * 6);
+  await expect(dienstdoende.getByTestId('eerlijk-vlak')).toHaveCount(8 * 5);
+  await expect(dienstdoende.getByTestId('dienstdoende-feestdagdiensten').getByTestId('eerlijk-vlak')).toHaveCount(0);
+  await expect(dienstdoende.getByTestId('dienstdoende-feestdagdiensten').getByTestId('eerlijk-pijl')).toHaveCount(0);
+  await expect(dienstdoende.getByTestId('eerlijk-cel')).toHaveCount(8);
+  const regels = await dienstdoende.getByTestId('eerlijk-verschil').allTextContents();
+  for (const r of regels) expect(r).toMatch(/^\d+ (nachten?|dagdiensten?|weekendavond(en)?|weekavond(en)?|uitloopdiensten?|feestdagdiensten?) (te veel|tekort)$/);
+  const goed = await dienstdoende.getByTestId('eerlijk-goed').count();
+  const metVerschil = await dienstdoende.getByTestId('eerlijk-cel').filter({ has: page.getByTestId('eerlijk-verschil') }).count();
+  expect(goed + metVerschil).toBe(8);
+  await expect(dienstdoende.getByTestId('eerlijk-pijl')).toHaveCount(regels.filter((r) => !/feestdagdienst/.test(r)).length);
   await expect(dienstdoende.getByTestId('dienstdoende-nachten').first()).toContainText(/\d+ (nacht|nachten), eerlijk is \d+( of \d+)?\./);
   await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');

@@ -27,7 +27,7 @@ import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst, AiosRoosterPerAios
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 import { telwoord } from '@/lib/aiosTelwoord';
-import { afwijking, buitenBereik, celWoorden, type Bereik, type EerlijkSoort } from '@/lib/aiosEerlijk';
+import { afwijking, bereikWoorden, celWoorden, eerlijkVak, metVak, verschillen, type Bereik, type EerlijkSoort } from '@/lib/aiosEerlijk';
 
 const CODE_NAAM: Record<string, string> = {
   UD: 'Uitloopdienst',
@@ -435,60 +435,60 @@ const SOORTEN: Array<{ sleutel: EerlijkSoort; kop: string; kleur: string }> = [
 ];
 
 /**
- * A number plus a bar; full width is the highest number of that column, or the highest end of a fair range. The
- * fair range is a dashed box over the bar (0.903.0): a bar that ends inside it is fair. Outside it an arrow says
- * more or fewer, so neither the colour nor the box is alone; a screen reader gets the whole cell in words.
+ * A number plus a bar; full width is the highest number of that column, or the highest end of a box (2.4.0, the
+ * achterwacht's look of 2.3.0). Under the bar the fair range in brackets; over it the range as a dashed box, half a
+ * dienst wider on either side so a bar on either end of the range ends inside it. Outside the range a red arrow
+ * says more or fewer, so neither the colour nor the box is alone. The feestdagen get the brackets only, no box and
+ * no arrow, as at the achterwacht (the planner's choice). A screen reader gets the whole cell in words.
  */
 function Telling({ soort, waarde, max, kleur, bereik }: { soort: EerlijkSoort; waarde: number; max: number; kleur: string; bereik: Bereik | null }) {
   const deel = (n: number) => (max > 0 ? (n / max) * 100 : 0);
-  const af = bereik ? afwijking(waarde, bereik) : 0;
+  const af = bereik && metVak(soort) ? afwijking(waarde, bereik) : 0;
+  const vak = metVak(soort) ? eerlijkVak(bereik) : null;
+  const breedte = vak ? deel(vak.tot) - deel(vak.van) : 0;
   const woorden = celWoorden(soort, waarde, bereik);
   return (
-    <div className="flex items-center gap-1.5" title={woorden}>
-      <span className="w-6 text-right tabular-nums" aria-hidden="true">
-        {waarde}
-      </span>
-      <span className="w-3 text-xs leading-none text-neutral-900" aria-hidden="true" data-testid={af === 0 ? undefined : 'eerlijk-pijl'}>
-        {af > 0 ? '▲' : af < 0 ? '▼' : ''}
-      </span>
-      <div className="relative h-3 min-w-[3rem] flex-1 rounded bg-neutral-100" aria-hidden="true">
-        <div className={`h-full rounded ${kleur}`} style={{ width: `${deel(waarde)}%` }} />
-        {bereik && (
-          <div
-            className="absolute -inset-y-1 rounded-sm border-2 border-dashed border-neutral-800"
-            style={{ left: `calc(${deel(bereik.van)}% - 2px)`, width: `calc(${deel(bereik.tot) - deel(bereik.van)}% + 4px)` }}
-            data-testid="eerlijk-vlak"
-          />
-        )}
+    <div title={woorden}>
+      <div className="flex items-center gap-1.5">
+        <span className="w-6 text-right tabular-nums" aria-hidden="true">
+          {waarde}
+        </span>
+        <span className="w-3 text-xs leading-none text-red-600" aria-hidden="true" data-testid={af === 0 ? undefined : 'eerlijk-pijl'}>
+          {af > 0 ? '▲' : af < 0 ? '▼' : ''}
+        </span>
+        <div className="relative h-3 min-w-[3rem] flex-1 rounded bg-neutral-100" aria-hidden="true">
+          <div className={`h-full rounded ${kleur}`} style={{ width: `${deel(waarde)}%` }} />
+          {vak && (
+            <div
+              className="absolute -inset-y-0.5 rounded-sm border border-dashed border-neutral-600"
+              style={{ left: `${deel(vak.van)}%`, width: `${breedte}%` }}
+              data-testid="eerlijk-vlak"
+            />
+          )}
+        </div>
       </div>
+      {bereik && (
+        <div className="ml-12 mt-0.5 text-xs text-neutral-500" aria-hidden="true" data-testid="eerlijk-onder">
+          [{bereikWoorden(bereik)}]
+        </div>
+      )}
       <span className="sr-only">{woorden}</span>
     </div>
   );
 }
 
-/** Above the table: who got more or fewer of a soort than fair, or that everyone is within it. */
-function EerlijkSamenvatting({ perAios }: { perAios: AiosRoosterPerAios[] }) {
-  if (!perAios.some((a) => SOORTEN.some((s) => a.eerlijk[s.sleutel] !== null))) return null;
-  const buiten = buitenBereik(perAios.map((a) => ({ codenaam: a.codenaam, aantallen: a, eerlijk: a.eerlijk })));
-  if (buiten.length === 0) {
-    return (
-      <p className="text-sm font-medium text-neutral-900" data-testid="eerlijk-samenvatting">
-        Iedereen heeft van elke soort een eerlijk aantal diensten.
-      </p>
-    );
-  }
+/** The last column (2.4.0): what is outside the fair range, in red, or "goed"; nothing before there are shares. */
+function EerlijkCel({ a }: { a: AiosRoosterPerAios }) {
+  if (!SOORTEN.some((s) => a.eerlijk[s.sleutel] !== null)) return null;
+  const regels = verschillen({ aantallen: a, eerlijk: a.eerlijk });
+  if (regels.length === 0) return <span className="text-xs" data-testid="eerlijk-goed">goed</span>;
   return (
-    <div className="text-sm text-neutral-900" data-testid="eerlijk-samenvatting">
-      <p className="font-medium">
-        {buiten.length === 1 ? '1 AIOS heeft' : `${buiten.length} AIOS hebben`} van een soort meer of minder diensten dan eerlijk:
-      </p>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5">
-        {buiten.map((b) => (
-          <li key={b.codenaam}>
-            {b.codenaam}: {b.verschillen.join('; ')}
-          </li>
-        ))}
-      </ul>
+    <div className="text-xs leading-5">
+      {regels.map((r) => (
+        <div key={r} className="whitespace-nowrap font-medium text-red-600" data-testid="eerlijk-verschil">
+          {r}
+        </div>
+      ))}
     </div>
   );
 }
@@ -496,18 +496,21 @@ function EerlijkSamenvatting({ perAios }: { perAios: AiosRoosterPerAios[] }) {
 function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
   const totaal = (a: AiosRoosterPerAios) => a.nachten + a.avonden + a.dagdiensten + a.uitloopdiensten;
   const max = Object.fromEntries(
-    SOORTEN.map((s) => [s.sleutel, Math.max(0, ...perAios.map((a) => Math.max(a[s.sleutel], a.eerlijk[s.sleutel]?.tot ?? 0)))])
+    SOORTEN.map((s) => [s.sleutel, Math.max(0, ...perAios.map((a) => Math.max(a[s.sleutel], (metVak(s.sleutel) ? eerlijkVak(a.eerlijk[s.sleutel]) : a.eerlijk[s.sleutel])?.tot ?? 0)))])
   ) as Record<EerlijkSoort, number>;
   return (
     <div className="space-y-2" data-testid="aios-dienstdoende">
-      <p className="text-sm text-neutral-600">
-        Iedereen die dit kwartaal meedoet, met hoeveel diensten van elke soort. De balk is naar de hoogste in die kolom. Een feestdagdienst telt ook
-        bij zijn soort mee. Het gestippelde vak is het eerlijke aantal: naar fte en werkdagen, met het inwerken en wat er van vorige kwartalen over
-        was. Eindigt de balk in het vak, dan is het eerlijk. ▲ is meer dan eerlijk en ▼ is minder. Bij nachten, dagdiensten en avonddiensten in het
-        weekend gaat een verschil mee naar het volgende kwartaal. De punten en het percentage staan erbij, want ook die worden eerlijk verdeeld: een
-        uitloopdienst is 0,2 punt en een nacht 1 punt.
+      <p className="text-sm text-neutral-600" data-testid="aios-dienstdoende-uitleg">
+        De breedte van de balk wordt bepaald door de hoogste waarde in die kolom. Onder elke balk staat het [eerlijke aantal] van die AIOS: naar fte en
+        werkdagen, met het inwerken en wat er van vorige kwartalen over was. Behalve bij feestdagen is dit eerlijke aantal grafisch weergegeven door het
+        gestippelde vak.
+        <br />
+        <span className="text-red-600">▲</span> is meer dan eerlijk en <span className="text-red-600">▼</span> is minder.
       </p>
-      <EerlijkSamenvatting perAios={perAios} />
+      <p className="text-sm text-neutral-600">
+        Een feestdagdienst telt ook bij zijn soort mee. Bij nachten, dagdiensten en avonddiensten in het weekend gaat een verschil mee naar het volgende
+        kwartaal. Ook de punten worden eerlijk verdeeld: een uitloopdienst is 0,2 punt en een nacht 1 punt.
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[56rem] text-sm">
           <thead>
@@ -521,6 +524,7 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
               <th className="py-1 pr-2 font-medium text-right">Diensten</th>
               <th className="py-1 pr-2 font-medium text-right">Punten</th>
               <th className="py-1 font-medium text-right">Percentage</th>
+              <th className="py-1 pl-3 font-medium">Eerlijk</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -538,6 +542,9 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
                   {a.dienstpercentage === null ? '-' : `${getal(a.dienstpercentage * 100)}%`}
                   {a.fte < 1 && <span className="block text-xs text-neutral-500">fte {getal(a.fte)}</span>}
                 </td>
+                <td className="py-1 pl-3 align-top" data-testid="eerlijk-cel">
+                  <EerlijkCel a={a} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -552,6 +559,7 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
               <td className="py-1 pr-2 text-right tabular-nums">{perAios.reduce((som, a) => som + totaal(a), 0)}</td>
               <td className="py-1 pr-2 text-right tabular-nums">{getal(perAios.reduce((som, a) => som + a.punten, 0))}</td>
               <td className="py-1" />
+              <td />
             </tr>
           </tfoot>
         </table>

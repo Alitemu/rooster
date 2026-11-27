@@ -654,6 +654,8 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet. (Vanaf 2.0.0 is dit vervangen door de lijst met
 onderdelen links, zie hieronder bij 2.0.0.)
 
+**Vanaf versie 2.4.0** ziet *Dienstdoende* van de AIOS eruit als dat van de achterwacht. Onder elke balk staat tussen blokhaken het eerlijke aantal van die AIOS, bijvoorbeeld *[7 of 8]*. Behalve bij feestdagen staat het ook als gestippeld vak over de balk, een halve dienst ruimer aan beide kanten: wie op de onder- of bovengrens zit, eindigt in het vak. Een rood ▲ betekent meer dan eerlijk, een rood ▼ minder. De lijst boven de tabel is vervangen door de kolom *Eerlijk*: per AIOS *goed*, of in rood wat er niet klopt, bijvoorbeeld *4 nachten tekort* of *3 weekavonden te veel*. De tabel is gemaakt voor een scherm van 1920 pixels breed. Op een laptop scrol je opzij.
+
 **Vanaf versie 2.3.0** toont *Dienstdoende* het streefbereik bij de balkjes. Onder elke balk staat tussen blokhaken het streefbereik van die persoon, inclusief de correctie uit het saldo, bijvoorbeeld *[2 of 3]*. Bij avond- en weekenddiensten staat het bereik ook als gestippeld vak over de balk: eindigt de balk in het vak, dan zit iemand binnen het bereik. Een rood ▲ betekent meer dan het bereik, een rood ▼ minder. In de kolom *Streefbereik* staat per soort dienst *goed* of in rood *1 te veel* of *2 tekort*, met in grijs hoeveel het saldo heeft bijgedragen. Een bereik staat nu overal in cijfers: *0 of 1* in plaats van *hoogstens 1*.
 
 **Vanaf versie 2.2.1** zegt *Dienstdoende* bij wie buiten het eigen bereik valt met hoeveel, bijvoorbeeld *⚠ 1 avonddienst te veel* of *⚠ 2 weekenddiensten tekort*. Is het rooster gepubliceerd, dan telt dat verschil mee in de volgende periode.

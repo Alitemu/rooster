@@ -4,8 +4,9 @@
  * "Fair" is the solver's own share (aios-solver per_aios, stored in aios_doel): their fte and werkdagen, the
  * inwerkperiode and, for nights, dagdiensten and avonddiensten in the weekend, the saldo of the quarters before. A
  * share is seldom whole (4,6 nights) and nobody does 0,6 of a night, so the fair range is the whole numbers on
- * either side: 4 or 5. A share below none (a debt from before) is a range of none. The planner reads the range as
- * a band behind the bar, the summary above the table names who is outside it.
+ * either side: 4 or 5. A share below none (a debt from before) is a range of none. The planner reads the range in
+ * brackets under the bar and as a dashed box over it (2.4.0, the achterwacht's look of 2.3.0, copied), and the last
+ * column names per AIOS what is outside it ("4 nachten tekort").
  *
  * No database here: components/AiosDienstrooster.tsx uses it in the browser.
  */
@@ -68,25 +69,45 @@ export function celWoorden(soort: EerlijkSoort, aantal: number, bereik: Bereik |
   return `${basis}, eerlijk is ${bereikWoorden(bereik)}.${af ? ` Dat is ${af}.` : ''}`;
 }
 
+/**
+ * The dashed box over the bar (2.4.0): half a dienst wider than the range on either side, so a bar that ends on
+ * either end of the range ends inside the box, and never left of none. Copied from the achterwacht's
+ * lib/bereikVak.ts, not imported (docs/development/diensten.md, "Copied, not changed").
+ */
+export function eerlijkVak(bereik: Bereik | null): Bereik | null {
+  return bereik ? { van: Math.max(0, bereik.van - 0.5), tot: bereik.tot + 0.5 } : null;
+}
+
+/** Whether a soort's bar gets the box and the arrow: all but the feestdagen, as at the achterwacht (2.4.0, the planner's choice). */
+export function metVak(soort: EerlijkSoort): boolean {
+  return soort !== 'feestdagdiensten';
+}
+
+/** The short words of the last column: "weekavond" there, where the screen reader hears "avonddienst door de week". */
+const KORT: Record<EerlijkSoort, [string, string]> = {
+  nachten: ['nacht', 'nachten'],
+  dagdiensten: ['dagdienst', 'dagdiensten'],
+  weekendavonden: ['weekendavond', 'weekendavonden'],
+  weekavonden: ['weekavond', 'weekavonden'],
+  uitloopdiensten: ['uitloopdienst', 'uitloopdiensten'],
+  feestdagdiensten: ['feestdagdienst', 'feestdagdiensten'],
+};
+
 export interface EerlijkRij {
-  codenaam: string;
   aantallen: Record<EerlijkSoort, number>;
   eerlijk: Record<EerlijkSoort, Bereik | null>;
 }
 
-export interface Buiten {
-  codenaam: string;
-  verschillen: string[];
-}
-
-/** Who got more or fewer of a soort than fair, with each difference in words, in the order of the rows. */
-export function buitenBereik(rijen: EerlijkRij[]): Buiten[] {
-  return rijen.flatMap((r) => {
-    const verschillen = EERLIJK_SOORTEN.flatMap(({ soort }) => {
-      const bereik = r.eerlijk[soort];
-      const af = bereik ? afwijkingWoorden(soort, r.aantallen[soort], bereik) : null;
-      return af ? [`${af} (eerlijk is ${bereikWoorden(bereik!)})`] : [];
-    });
-    return verschillen.length > 0 ? [{ codenaam: r.codenaam, verschillen }] : [];
+/**
+ * The last column of Dienstdoende (2.4.0): every soort an AIOS is outside the fair range of, in the planner's
+ * order, as "4 nachten tekort" or "3 weekavonden te veel". Empty is "goed". A soort without a share is left out.
+ */
+export function verschillen(rij: EerlijkRij): string[] {
+  return EERLIJK_SOORTEN.flatMap(({ soort }) => {
+    const bereik = rij.eerlijk[soort];
+    const af = bereik ? afwijking(rij.aantallen[soort], bereik) : 0;
+    if (af === 0) return [];
+    const [enkelvoud, meervoud] = KORT[soort];
+    return [`${telwoord(Math.abs(af), enkelvoud, meervoud)} ${af > 0 ? 'te veel' : 'tekort'}`];
   });
 }

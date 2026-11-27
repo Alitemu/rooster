@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.3.0. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.4.0. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -199,6 +199,13 @@ overslaan:
   opgegeven, dan staat er vóór het maken een gele waarschuwing over de nachtblokken
   van zondag tot en met dinsdag. Geen lege diensten die er niet
   hoeven te zijn, en de uitleg bij lege diensten klopt.
+- [ ] **E4a.** Open bij *Dienstrooster* het tabblad *Dienstdoende*. Je ziet: onder
+  elke balk het eerlijke aantal tussen blokhaken ("[7 of 8]"). Bij alle soorten
+  behalve feestdagen een gestippeld vak over de balk. Wie op de onder- of
+  bovengrens zit, eindigt in het vak. In de laatste kolom *Eerlijk* staat "goed",
+  of in rood wat er niet klopt ("4 nachten tekort", "3 weekavonden te veel"), met
+  een rood ▲ of ▼ bij de balk. Bij feestdagen nooit een vak of pijl. Op een
+  scherm van 1920 pixels breed past de hele tabel zonder opzij te scrollen.
 - [ ] **E5.** Publiceren, definitief maken, daarna ruilen tussen twee AIOS. Bij
   een voorlopig rooster zegt de app dat ruilen pas kan als het definitief is.
 - [ ] **E6.** Een AIOS ziet niets van een andere AIOS en niets van de

@@ -222,7 +222,14 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   included (a debt stays a debt). Since 0.903.0 also doel_weekavonden and
   doel_uitloopdiensten (no saldo): the app stores all five and shows each
   as a fair range in Dienstdoende (lib/aiosEerlijk.ts: the whole numbers
-  either side of the share, none below none). An older solver image sends
+  either side of the share, none below none). Since 2.4.0 in the
+  achterwacht's look of 2.3.0, copied into lib/aiosEerlijk.ts (eerlijkVak,
+  metVak, verschillen), not imported: the range in brackets under the bar, a
+  box half a dienst wider than it and never left of none, red arrows, no box
+  and no arrow for the feestdagen (the planner's choice, as at the
+  achterwacht, though the feestdag share is a real share here), and a last
+  column "Eerlijk" instead of the summary above the table. The table is made
+  for 1920 pixels (the ward's screens); a laptop scrolls it sideways. An older solver image sends
   neither: NULL, no range for those two. test_eerlijkheid.py checks they
   add up to every such dienst and that inwerken lowers the evenings' share
   but not the uitloopdiensten'.

@@ -399,7 +399,11 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   een gestippeld vak achter het balkje: de hele getallen rond het aandeel dat
   de solver uitrekent (4,6 nachten is 4 of 5, een schuld van vroeger is 0).
   Buiten het vak staat ▲ of ▼ en boven de tabel wie meer of minder heeft dan
-  eerlijk, in woorden.
+  eerlijk, in woorden. Sinds 2.4.0 in de vorm van de achterwacht (2.3.0): het
+  bereik tussen blokhaken onder de balk, het vak een halve dienst ruimer en
+  nooit onder 0, rode pijlen, bij feestdagen geen vak en geen pijl (de keuze
+  van de planner), en in plaats van de lijst boven de tabel een laatste kolom
+  *Eerlijk* ("goed", of in rood "4 nachten tekort"). Gemaakt voor 1920 pixels.
 - De planner ziet vóór het genereren hoeveel punten het kwartaal heeft: Q3 2026
   heeft 195 punten (nachten 91, avonden 65, dagdiensten 26, uitloopdiensten 13),
   dus de AIOS hebben samen minstens 12 fte nodig om onder gemiddeld 25% te
