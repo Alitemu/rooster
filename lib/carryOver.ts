@@ -33,7 +33,7 @@ import { db } from '@/db/client';
 import {
   TELLERS,
   countSlotsByTeller,
-  resolvePeriodBands,
+  resolvePeriodTargets,
   resolveRulesetConfig,
   scaledBandForMember,
   loadPeriodMembers,
@@ -93,7 +93,7 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
   const fellows = getFellowIds(period.id);
   const config = resolveRulesetConfig(period);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(config, countSlotsByTeller(period.id), members, fellows, distributionMode);
+  const bands = resolvePeriodTargets(config, countSlotsByTeller(period.id), members, fellows, distributionMode);
 
   const actualRows = db
     .prepare(

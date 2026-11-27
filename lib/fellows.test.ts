@@ -12,7 +12,8 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { PATCH as patchSlot } from '@/app/api/person/[id]/preferences/slot/[slotId]/route';
 import { GET as getFellow, PUT as putFellow } from '@/app/api/person/[id]/fellow/route';
 import { setFellow, isFellow, releasedWeekendDays } from './fellows';
-import { computeMemberTargets, resolvePeriodBands } from './rosterBands';
+import { computeMemberTargets, loadPeriodMembers, resolvePeriodBands, resolvePeriodTargets, resolveRulesetConfig, countSlotsByTeller } from './rosterBands';
+import { memberBands } from './bandShortfall';
 import { checkBlockBudget } from './blockBudget';
 import { removeAbsenceAvailability, syncAvailabilityForAbsence } from './absenceSync';
 import { removePatternAvailability, syncAvailabilityForPattern } from './parttimeSync';
@@ -383,12 +384,12 @@ describe('streefbereik met fellows', () => {
     return [members, new Set(members.slice(0, fellows).map((m) => m.id))] as const;
   };
 
-  it('raises the others\' configured weekend band by people / (people - fellows), and leaves the rest alone', () => {
+  it('keeps a configured weekend band as it is with fellows: the planner\'s band, literally (2.5.0)', () => {
     const counts = { AVOND: 110, WEEKEND: 44, FEESTDAG: 4 };
     const config = { bandAvond: [3, 4], bandWeekend: [1, 2], bandFeestdag: [0, 1] };
     expect(resolvePeriodBands(config, counts, ...pool(31, 0), 'GELIJK')).toEqual({ AVOND: [3, 4], WEEKEND: [1, 2], FEESTDAG: [0, 1] });
-    // 31 / 26: floor(1.19) = 1, ceil(2.38) = 3.
-    expect(resolvePeriodBands(config, counts, ...pool(31, 5), 'GELIJK')).toEqual({ AVOND: [3, 4], WEEKEND: [1, 3], FEESTDAG: [0, 1] });
+    // Raised by 31 / 26 it was floor(1.19) = 1 to ceil(2.38) = 3: three values, no target (2.5.0).
+    expect(resolvePeriodBands(config, counts, ...pool(31, 5), 'GELIJK')).toEqual({ AVOND: [3, 4], WEEKEND: [1, 2], FEESTDAG: [0, 1] });
   });
 
   it('works the default weekend band out over the non-fellows when none is configured', () => {
@@ -398,7 +399,7 @@ describe('streefbereik met fellows', () => {
     expect(resolvePeriodBands({}, counts, ...pool(30, 10), 'GELIJK').WEEKEND).toEqual([3, 4]);
   });
 
-  it('gives a fellow 0 up to their released days, without the ledger, and the others a raised band', async () => {
+  it('gives a fellow 0 up to their released days, without the ledger, and the others the configured band', async () => {
     const f = createFixture({ people: 4, config: { bandWeekend: [1, 1] } });
     const [fellow, ander] = f.people;
     setFellow(f.periodId, fellow, true);
@@ -408,13 +409,13 @@ describe('streefbereik met fellows', () => {
     ).run(crypto.randomUUID(), fellow, f.poolId, f.periodId, fellow);
 
     let targets = computeMemberTargets(f.periodId);
-    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 0, fellow: true, basis: [1, 2], saldo: 0 });
-    // 4 / 3: [floor(1.33), ceil(1.33)] = [1, 2].
-    expect(targets.get(ander)!.WEEKEND).toEqual({ min: 1, max: 2, fellow: false, basis: [1, 2], saldo: 0 });
+    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 0, fellow: true, basis: [1, 1], saldo: 0 });
+    // The configured band as it is (2.5.0); raised by 4 / 3 it was [1, 2].
+    expect(targets.get(ander)!.WEEKEND).toEqual({ min: 1, max: 1, fellow: false, basis: [1, 1], saldo: 0 });
 
     await patch(fellow, f.slotByDate.get('2028-04-22')!, null);
     targets = computeMemberTargets(f.periodId);
-    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 1, fellow: true, basis: [1, 2], saldo: 0 });
+    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 1, fellow: true, basis: [1, 1], saldo: 0 });
   });
 
   it('a credit bigger than the bereik leaves a target of zero, never one below zero', () => {
@@ -428,6 +429,37 @@ describe('streefbereik met fellows', () => {
     // 2.2.0: the band before the saldo and the saldo itself, for the planner's table (lib/streefbereikPerPersoon.ts).
     expect(targets.get(credit)!.AVOND).toEqual({ min: 0, max: 0, fellow: false, basis: [1, 2], saldo: -5 });
     expect(targets.get(ander)!.AVOND.min).toBeGreaterThanOrEqual(0);
+  });
+
+  it('sends the solver the same band, never a ceiling below zero, which it would refuse (2.5.0)', () => {
+    const f = createFixture({ people: 3, config: { bandAvond: [1, 2], bandWeekend: [1, 2] } });
+    const [credit, fellow] = f.people;
+    setFellow(f.periodId, fellow, true);
+    db.prepare(
+      `INSERT INTO dienstrooster_ledger_entry (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, ?, 'AVOND', ?, -5, 'test', 'CORRECTIE', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), credit, f.poolId, f.periodId, credit);
+    const period = db
+      .prepare('SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(f.periodId) as { id: string; pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null };
+    const members = loadPeriodMembers(period);
+    const fellows = new Set([fellow]);
+    const sent = memberBands(
+      f.periodId,
+      resolvePeriodTargets(resolveRulesetConfig(period), countSlotsByTeller(f.periodId), members, fellows, 'GELIJK'),
+      members,
+      fellows,
+      'GELIJK',
+      { [credit]: { AVOND: -5 } }
+    );
+    expect(sent[credit].AVOND).toEqual([0, 0]);
+    const targets = computeMemberTargets(f.periodId);
+    for (const m of members) {
+      for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as const) {
+        const t = targets.get(m.id)![teller];
+        expect(sent[m.id][teller], `${m.id} ${teller}`).toEqual([t.min, t.max]);
+      }
+    }
   });
 
   it('keeps a fellow\'s weekend saldo: shifts taken anyway pay off debt, nothing new is added', () => {
@@ -449,8 +481,8 @@ describe('streefbereik met fellows', () => {
     const entries = computeCarryOver(period);
     const weekend = (id: string) => entries.find((e) => e.person_id === id && e.teller === 'WEEKEND');
     expect(weekend(fellow)?.delta).toBe(1);
-    // The other person had a raised band [2, 4] with nothing done: 2 to make up.
-    expect(weekend(ander)?.delta).toBe(2);
+    // The other person had the configured band [1, 2] with nothing done: 1 to make up (raised, [2, 4], it was 2).
+    expect(weekend(ander)?.delta).toBe(1);
   });
 });
 

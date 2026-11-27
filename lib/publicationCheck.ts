@@ -190,6 +190,13 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     fellows,
     typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK'
   );
+  const bandsZonderFellows = resolvePeriodBands(
+    config,
+    countSlotsByTeller(periodId),
+    members,
+    new Set(),
+    typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK'
+  );
   const targets = computeMemberTargets(periodId);
   const naarRato = config.distributionMode === 'NAAR_RATO';
 
@@ -228,8 +235,11 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
       naarRato ? 'Bij naar-rato-verdeling is het bereik geschaald naar ieders deelnamefactor.' : null,
       // A member who is a fellow, as resolvePeriodBands counts them: the
       // tick stays when someone's membership moves off the period.
+      // "verhoogd" only when it was: a configured weekend band stays as it is (2.5.0).
       members.some((m) => fellows.has(m.id))
-        ? 'Fellows tellen niet mee voor de weekenden. Het weekendbereik van de anderen is daarom verhoogd.'
+        ? bands.WEEKEND[1] !== bandsZonderFellows.WEEKEND[1] || bands.WEEKEND[0] !== bandsZonderFellows.WEEKEND[0]
+          ? 'Fellows tellen niet mee voor de weekenden. Het weekendbereik van de anderen is daarom verhoogd.'
+          : 'Fellows tellen niet mee voor de weekenden.'
         : null,
     ].filter((note): note is string => note !== null);
 

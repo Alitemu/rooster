@@ -13,7 +13,7 @@ import {
   dateToISO,
 } from './holidays';
 import { reminderMoment, REMINDER_HOUR } from './autoReminders';
-import { combineMemberships, resolvePeriodBands, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
+import { combineMemberships, resolvePeriodBands, resolvePeriodTargets, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
 
 /**
  * The calendar the roster is built on, checked against independent
@@ -213,7 +213,7 @@ describe('streefbereik: the targets leave room for every shift', () => {
   /** Membership rows; rows with the same `id` are one person's memberships. */
   function room(slots: number, rows: Array<M & { id?: string }>, mode = 'GELIJK') {
     const members = combineMemberships(rows.map((m, i) => ({ ...m, id: m.id ?? `p${i}` })), period);
-    const bands = resolvePeriodBands({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, members, new Set(), mode);
+    const bands = resolvePeriodTargets({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, members, new Set(), mode);
     const scaled = members.map((m) => scaledBandForMember(bands, teller, m, mode));
     return {
       scaled,

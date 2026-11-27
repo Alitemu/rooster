@@ -345,6 +345,18 @@ describe('runPublicationCheck', () => {
       expect(runPublicationCheck(period).warnings.join(' ')).toContain(FELLOW_NOTE);
     });
 
+    // 2.5.0: a configured weekend band stays as it is with fellows, so the sentence no longer says it was raised.
+    it('does not say the weekend band was raised when the period names one', () => {
+      const ctx = createPool(8, { bandAvond: [3, 4], bandWeekend: [1, 2] });
+      const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [3, 4], bandWeekend: [1, 2] });
+      fillEvenly(period.id, slotIds, ctx.personIds.slice(0, 7));
+      markFellow(period.id, ctx.personIds[0]);
+
+      const tekst = runPublicationCheck(period).warnings.join(' ');
+      expect(tekst).toContain('Fellows tellen niet mee voor de weekenden.');
+      expect(tekst).not.toContain('verhoogd');
+    });
+
     it('is not there for a fellow who no longer takes part in the period', () => {
       // The planner's report: "er zijn geen fellows", yet the warning said
       // the others' weekend band was raised for them. The tick stays when

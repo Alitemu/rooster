@@ -246,45 +246,105 @@ export function effectiveHeadcount(members: PeriodMember[], distributionMode: st
 }
 
 /**
- * A single member's effective [min, max] for one counter, scaled from the
- * period's flat band exactly the way solver/constraints.py's
- * add_band_constraints does - dekking always applied first
- * (unconditional - a mid-period joiner/leaver is a structural fact, not a
- * distribution_mode-gated policy choice), then the NAAR_RATO deelnamefactor
- * scaling only when distribution_mode asks for it. floor(min)/ceil(max) at
- * each step keeps the band width >= 1 whenever the un-scaled band already
- * had one, instead of both ends rounding the same way and collapsing it to
- * a single value.
+ * A period's bands together with the exact share they were rounded from (2.5.0).
  *
- * generate-roster sends the solver the same dekking (coverage_factors) and
- * deelnamefactor (participation_factors), so the two can never disagree
- * about what that target is (generate-roster/solverContract.test.ts).
+ * `aandeel` is what one member present the whole period at factor 1 gets on
+ * average: the counter's shifts over the effective headcount (the weekend's
+ * over the non-fellows). It is null where the ruleset names the band itself:
+ * then the planner's band is the truth and its midpoint the share.
  */
-export function scaledBandForMember(bands: BandsByTeller, teller: Teller, member: PeriodMember, distributionMode: string): Band {
-  const [baseMin, baseMax] = bands[teller];
-  let min = Math.floor(baseMin * member.dekking);
-  let max = Math.max(min, Math.ceil(baseMax * member.dekking));
+export interface PeriodBands {
+  bands: BandsByTeller;
+  aandeel: Record<Teller, number | null>;
+}
 
-  if (distributionMode === 'NAAR_RATO') {
-    min = Math.floor(min * member.deelnamefactor);
-    max = Math.max(min, Math.ceil(max * member.deelnamefactor));
-  }
-
-  return [min, max];
+/**
+ * A single member's [min, max] for one counter, before the ledger delta (2.5.0).
+ *
+ * Someone present the whole period at factor 1 gets the period's band as it
+ * is: the band the ruleset names, literally (the planner's choice, 2.5.0),
+ * also with fellows; or the derived one. Everyone else (dekking below 1, or
+ * under NAAR_RATO a deelnamefactor below 1) gets their own share in
+ * proportion, rounded once: x or x+1, never three values.
+ *
+ * It used to scale the band's two ends, the minimum down and the maximum up,
+ * at every factor: [1, 2] became "1 tot en met 3" for the others when there
+ * were fellows, and [2, 3] at 0.7 "1 tot en met 3" for a part-timer. A band
+ * of three values is no target (the planner, November 2026).
+ *
+ * The share is the exact one where there is one: the maximums of a derived
+ * band then always add up to every shift (floor(s) + 1 > s), and the
+ * minimums never to more than there are (lib/calendarRules.test.ts). A
+ * named band has none: its midpoint stands in, and whether the maximums
+ * cover every shift is the planner's (lib/bandShortfall.ts says so before
+ * generating). A hair over, so 0.7 x (2 + 3) / 2 x 4 / 1.4 lands on the
+ * whole number it means; not rounded to hundredths, which could put a
+ * minimum above the share and the minimums together above the shifts.
+ *
+ * The app works it out and sends it to the solver per person (generate-roster,
+ * band_overrides), so the solver's own scaling is not used for the achterwacht's
+ * roster: there is one calculation, here.
+ */
+export function scaledBandForMember(period: PeriodBands, teller: Teller, member: PeriodMember, distributionMode: string): Band {
+  const [min, max] = period.bands[teller];
+  const factor = member.dekking * (distributionMode === 'NAAR_RATO' ? member.deelnamefactor : 1);
+  if (factor >= 1) return [min, max];
+  if (max <= 0) return [0, 0];
+  const share = (period.aandeel[teller] ?? (min + max) / 2) * factor;
+  const n = Math.floor(share + 1e-9);
+  return [n, n + 1];
 }
 
 /**
  * The period's bands with its fellows (lib/fellows.ts) taken into account.
  *
  * Fellows don't do weekends, so the weekend shifts are shared by the
- * others only and their WEEKEND band goes up:
- * - a band the ruleset names explicitly (set when the period was created,
- *   over everyone) is scaled by everyone / the others (effective
- *   headcounts, effectiveHeadcount), floor for the
- *   minimum and ceil for the maximum like every other band scaling here;
+ * others only:
+ * - a band the ruleset names explicitly is kept as it is (2.5.0, the
+ *   planner's choice): it is what someone present the whole period gets,
+ *   fellows or not. It used to be raised by everyone / the others, which
+ *   made a band of three values; whether it still holds every weekend
+ *   shift, lib/bandShortfall.ts tells the planner before generating;
  * - without one, the usual default is worked out over the non-fellows.
  * AVOND and FEESTDAG are unchanged: fellows do those like everyone else.
  */
+export function resolvePeriodTargets(
+  config: Record<string, unknown>,
+  slotCountByTeller: Record<Teller, number>,
+  members: PeriodMember[],
+  fellowIds: ReadonlySet<string>,
+  distributionMode: string
+): PeriodBands {
+  const everyone = effectiveHeadcount(members, distributionMode);
+  const bands = resolveBands(config, slotCountByTeller, everyone);
+  const others = effectiveHeadcount(
+    members.filter((m) => !fellowIds.has(m.id)),
+    distributionMode
+  );
+  const fellows = members.some((m) => fellowIds.has(m.id)) && others > 0;
+  const key: Record<Teller, string> = { AVOND: 'bandAvond', WEEKEND: 'bandWeekend', FEESTDAG: 'bandFeestdag' };
+  const named = (teller: Teller) => {
+    const c = config[key[teller]];
+    return Array.isArray(c) && c.length === 2;
+  };
+  const share = (teller: Teller, people: number): number | null => {
+    if (named(teller)) return null;
+    const total = slotCountByTeller[teller];
+    if (total <= 0) return 0;
+    return people > 0 ? total / people : total;
+  };
+  if (fellows && !named('WEEKEND')) bands.WEEKEND = resolveBands({}, slotCountByTeller, others).WEEKEND;
+  return {
+    bands,
+    aandeel: {
+      AVOND: share('AVOND', everyone),
+      WEEKEND: share('WEEKEND', fellows ? others : everyone),
+      FEESTDAG: share('FEESTDAG', everyone),
+    },
+  };
+}
+
+/** resolvePeriodTargets' bands alone, for what shows or checks the period's band itself. */
 export function resolvePeriodBands(
   config: Record<string, unknown>,
   slotCountByTeller: Record<Teller, number>,
@@ -292,24 +352,7 @@ export function resolvePeriodBands(
   fellowIds: ReadonlySet<string>,
   distributionMode: string
 ): BandsByTeller {
-  const everyone = effectiveHeadcount(members, distributionMode);
-  const bands = resolveBands(config, slotCountByTeller, everyone);
-  const fellowCount = members.filter((m) => fellowIds.has(m.id)).length;
-  const others = effectiveHeadcount(
-    members.filter((m) => !fellowIds.has(m.id)),
-    distributionMode
-  );
-  if (fellowCount <= 0 || others <= 0) return bands;
-
-  const configured = config.bandWeekend;
-  if (Array.isArray(configured) && configured.length === 2) {
-    const factor = everyone / others;
-    const min = Math.floor(bands.WEEKEND[0] * factor);
-    bands.WEEKEND = [min, Math.max(min, Math.ceil(bands.WEEKEND[1] * factor))];
-  } else {
-    bands.WEEKEND = resolveBands({}, slotCountByTeller, others).WEEKEND;
-  }
-  return bands;
+  return resolvePeriodTargets(config, slotCountByTeller, members, fellowIds, distributionMode).bands;
 }
 
 /**
@@ -362,7 +405,7 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
   const released = releasedWeekendDays(periodId);
   const config = resolveRulesetConfig(period);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(config, countSlotsByTeller(periodId), members, fellows, distributionMode);
+  const bands = resolvePeriodTargets(config, countSlotsByTeller(periodId), members, fellows, distributionMode);
 
   const deltas = new Map<string, number>();
   for (const row of db

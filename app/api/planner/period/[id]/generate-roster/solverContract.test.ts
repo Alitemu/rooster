@@ -259,6 +259,23 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
     expect(input.slots).toHaveLength(55);
   });
 
+  // 2.5.0: the app works each person's band out once (lib/rosterBands.ts scaledBandForMember) and sends it whole,
+  // so the solver's own scaling of the period's band, which rounded both ends outward, is not used: a person's band
+  // is the one the planner sees, and whoever is not there the whole period gets x or x+1.
+  it('sends every person their own band for every counter, x or x+1 for whoever is there part of it', async () => {
+    buildPeriod(mode);
+    const input = await generate();
+    const targets = computeMemberTargets(ids.period);
+    expect(new Set(Object.keys(input.band_overrides))).toEqual(new Set(input.people));
+    for (const personId of input.people as string[]) {
+      for (const teller of TELLERS) {
+        const t = targets.get(personId)![teller];
+        expect({ personId, teller, band: input.band_overrides[personId][teller] }).toEqual({ personId, teller, band: [t.min, t.max] });
+        if (!t.fellow && t.basis && personId === ids.halfway) expect(t.basis[1] - t.basis[0], teller).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
   // The solver is sent the factor from the part-time days, whatever the mode: under GELIJK it ignores it,
   // under NAAR_RATO it narrows the part-timer's band. Both sides above use one loader, so the factor itself
   // is held here.

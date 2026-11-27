@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { resolveBands, resolvePeriodBands, scaledBandForMember, countNominalAvondWeekendDays, type Teller } from './rosterBands';
+import { resolveBands, resolvePeriodTargets, scaledBandForMember, countNominalAvondWeekendDays, type Teller } from './rosterBands';
 
 /**
  * Band rounding - the [min, max] a planner sees as "streefaantal" when no
@@ -107,7 +107,7 @@ describe('the default bands over random members', () => {
         (raw, slots, mode) => {
           const members = raw.map((m, i) => ({ id: `p${i}`, dekking: m.dekking, deelnamefactor: m.deelnamefactor }));
           const fellows = new Set(raw.flatMap((m, i) => (m.fellow ? [`p${i}`] : [])));
-          const bands = resolvePeriodBands({}, slots, members, fellows, mode);
+          const bands = resolvePeriodTargets({}, slots, members, fellows, mode);
           for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as const) {
             // Fellows do no weekends when someone else can (resolvePeriodBands).
             const counted =
@@ -129,5 +129,83 @@ describe('the default bands over random members', () => {
       ),
       { numRuns: 2000 }
     );
+  });
+});
+
+/**
+ * Each person's band, 2.5.0 (the planner: "Hoe kan een bereik 3 tot en met 5 zijn? Het streefbereik zou toch x of
+ * x+1 moeten zijn?"). Someone present the whole period at factor 1 gets the band the ruleset names, literally, also
+ * with fellows; everyone else their own share in proportion, rounded once. The ends used to be scaled one by one,
+ * the minimum down and the maximum up: [1, 2] became 1 to 3.
+ */
+describe('scaledBandForMember: the planner\'s band for the whole period, x or x+1 for the rest', () => {
+  const band = fc
+    .tuple(fc.nat(12), fc.nat(3))
+    .map(([min, w]): [number, number] => [min, min + w]);
+  const member = fc.record({
+    dekking: fc.constantFrom(1, 1, 0.9, 0.75, 0.5, 0.3, 0.05),
+    deelnamefactor: fc.constantFrom(1, 1, 0.8, 0.6, 0.5, 0.25),
+    fellow: fc.boolean(),
+  });
+  const pool = fc.array(member, { minLength: 1, maxLength: 30 });
+  const slots = fc.record({ AVOND: fc.nat(400), WEEKEND: fc.nat(200), FEESTDAG: fc.nat(20) });
+  const mode = fc.constantFrom('GELIJK', 'NAAR_RATO');
+  const factorOf = (m: { dekking: number; deelnamefactor: number }, mo: string) =>
+    m.dekking * (mo === 'NAAR_RATO' ? m.deelnamefactor : 1);
+  const tellers = ['AVOND', 'WEEKEND', 'FEESTDAG'] as const;
+
+  it('gives someone present the whole period exactly the configured band, fellows or not', () => {
+    fc.assert(
+      fc.property(pool, slots, mode, band, band, band, (raw, s, mo, avond, weekend, feestdag) => {
+        const members = raw.map((m, i) => ({ id: `p${i}`, dekking: m.dekking, deelnamefactor: m.deelnamefactor }));
+        const fellows = new Set(raw.flatMap((m, i) => (m.fellow ? [`p${i}`] : [])));
+        const config = { bandAvond: avond, bandWeekend: weekend, bandFeestdag: feestdag };
+        const period = resolvePeriodTargets(config, s, members, fellows, mo);
+        const named = { AVOND: avond, WEEKEND: weekend, FEESTDAG: feestdag };
+        for (const m of members.filter((x) => factorOf(x, mo) >= 1)) {
+          for (const t of tellers) expect(scaledBandForMember(period, t, m, mo), t).toEqual(named[t]);
+        }
+      }),
+      { numRuns: 1000 }
+    );
+  });
+
+  it('gives everyone else x or x+1 around their own share, never three values', () => {
+    fc.assert(
+      fc.property(pool, slots, mode, fc.boolean(), band, (raw, s, mo, configured, weekend) => {
+        const members = raw.map((m, i) => ({ id: `p${i}`, dekking: m.dekking, deelnamefactor: m.deelnamefactor }));
+        const fellows = new Set(raw.flatMap((m, i) => (m.fellow ? [`p${i}`] : [])));
+        const period = resolvePeriodTargets(configured ? { bandWeekend: weekend } : {}, s, members, fellows, mo);
+        for (const m of members.filter((x) => factorOf(x, mo) < 1)) {
+          for (const t of tellers) {
+            const [min, max] = scaledBandForMember(period, t, m, mo);
+            const [pMin, pMax] = period.bands[t];
+            if (pMax <= 0) {
+              expect([min, max], t).toEqual([0, 0]);
+              continue;
+            }
+            expect(max - min, t).toBe(1);
+            // Their own share: the exact one, or the configured band's midpoint, in proportion.
+            const share = (period.aandeel[t] ?? (pMin + pMax) / 2) * factorOf(m, mo);
+            expect(min, t).toBeLessThanOrEqual(share + 1e-9);
+            expect(max, t).toBeGreaterThan(share);
+          }
+        }
+      }),
+      { numRuns: 1000 }
+    );
+  });
+
+  it('the planner\'s case: [1, 2] with 5 fellows among 31 stays 1 or 2, and 2 or 3 at 0.7 is 1 or 2', () => {
+    const members = Array.from({ length: 31 }, (_, i) => ({ id: `p${i}`, dekking: 1, deelnamefactor: 1 }));
+    const fellows = new Set(members.slice(0, 5).map((m) => m.id));
+    const counts = { AVOND: 110, WEEKEND: 44, FEESTDAG: 4 };
+    const period = resolvePeriodTargets({ bandWeekend: [1, 2], bandAvond: [2, 3] }, counts, members, fellows, 'GELIJK');
+    expect(scaledBandForMember(period, 'WEEKEND', members[10], 'GELIJK')).toEqual([1, 2]);
+    // (2 + 3) / 2 x 0.7 = 1.75: 1 or 2. Both ends scaled it was floor(1.4) = 1 to ceil(2.1) = 3.
+    expect(scaledBandForMember(period, 'AVOND', { id: 'x', dekking: 0.7, deelnamefactor: 1 }, 'GELIJK')).toEqual([1, 2]);
+    // Derived: 110 / 31 = 3.55, at 0.5 1.77: 1 or 2.
+    const derived = resolvePeriodTargets({}, counts, members, new Set(), 'GELIJK');
+    expect(scaledBandForMember(derived, 'AVOND', { id: 'x', dekking: 0.5, deelnamefactor: 1 }, 'GELIJK')).toEqual([1, 2]);
   });
 });

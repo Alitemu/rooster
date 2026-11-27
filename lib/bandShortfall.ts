@@ -23,10 +23,11 @@ import {
   fellowWeekendBand,
   loadPeriodMembers,
   resolveBands,
-  resolvePeriodBands,
+  resolvePeriodTargets,
   resolveRulesetConfig,
   scaledBandForMember,
-  type BandsByTeller,
+  type Band,
+  type PeriodBands,
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
@@ -39,33 +40,65 @@ export const BAND_CONFIG_KEY: Record<Teller, 'bandAvond' | 'bandWeekend' | 'band
   FEESTDAG: 'bandFeestdag',
 };
 
+/** Every member's band per counter, as the solver gets it (band_overrides). */
+export type MemberBands = Record<string, Record<Teller, Band>>;
+
 /**
- * Per counter where the members' maximums together (scaled band plus their
- * balance, a fellow's own weekend band) are fewer than the shifts: how many
- * they allow, how many there are, and - when the typed band is lower than
- * the one the app would choose for these members itself - that band, in the
- * same terms as the "Venster en streefbereik" inputs.
+ * Every member's band per counter, the ledger delta folded in: what the
+ * solver holds each person to (2.5.0). Sent whole as band_overrides, which
+ * the solver takes as it is (no scaling, no delta of its own; only what
+ * the planner filled in by hand is taken off), so the band the planner
+ * sees (computeMemberTargets, the same scaledBandForMember and the same
+ * clamp at none) is the band the roster is made with. A fellow's weekend
+ * is their own (fellowWeekendBand), without a delta.
+ */
+export function memberBands(
+  periodId: string,
+  period: PeriodBands,
+  members: PeriodMember[],
+  fellowIds: ReadonlySet<string>,
+  distributionMode: string,
+  balances: Record<string, Record<string, number>>
+): MemberBands {
+  const released = releasedWeekendDays(periodId);
+  const out: MemberBands = {};
+  for (const m of members) {
+    const own = {} as Record<Teller, Band>;
+    for (const teller of TELLERS) {
+      const scaled = scaledBandForMember(period, teller, m, distributionMode);
+      if (teller === 'WEEKEND' && fellowIds.has(m.id)) {
+        own[teller] = fellowWeekendBand(scaled, released.get(m.id) ?? 0);
+        continue;
+      }
+      // A credit bigger than the bereik pulls the ceiling below none: nobody has fewer than none.
+      const delta = balances[m.id]?.[teller] ?? 0;
+      own[teller] = [Math.max(0, scaled[0] + delta), Math.max(0, scaled[1] + delta)];
+    }
+    out[m.id] = own;
+  }
+  return out;
+}
+
+/**
+ * Per counter where the members' maximums together (memberBands) are fewer
+ * than the shifts: how many they allow, how many there are, and - when the
+ * typed band is lower than the one the app would choose for these members
+ * itself - that band, in the same terms as the "Venster en streefbereik"
+ * inputs.
  */
 export function computeBandShortfall(args: {
   config: Record<string, unknown>;
-  bands: BandsByTeller;
   slotCountByTeller: Record<Teller, number>;
   members: PeriodMember[];
-  balances: Record<string, Record<string, number>>;
-  bandOverrides: Record<string, { WEEKEND: [number, number] }>;
+  bands: MemberBands;
   distributionMode: string;
 }): BereikTekort {
-  const { config, bands, slotCountByTeller, members, balances, bandOverrides, distributionMode } = args;
+  const { config, slotCountByTeller, members, bands, distributionMode } = args;
   const suggested = resolveBands({}, slotCountByTeller, effectiveHeadcount(members, distributionMode));
   const tekort: BereikTekort = {};
   for (const teller of TELLERS) {
     let maximaal = 0;
-    for (const m of members) {
-      const override = teller === 'WEEKEND' ? bandOverrides[m.id]?.WEEKEND : undefined;
-      maximaal += override
-        ? override[1]
-        : Math.max(0, scaledBandForMember(bands, teller, m, distributionMode)[1] + (balances[m.id]?.[teller] ?? 0));
-    }
+    for (const m of members) maximaal += bands[m.id]?.[teller]?.[1] ?? 0;
     if (maximaal >= slotCountByTeller[teller]) continue;
     const configured = config[BAND_CONFIG_KEY[teller]];
     const voorgesteld = suggested[teller];
@@ -76,23 +109,6 @@ export function computeBandShortfall(args: {
     };
   }
   return tekort;
-}
-
-/** Fellows' own weekend band (lib/fellows.ts), sent to the solver as band_overrides. */
-export function fellowBandOverrides(
-  periodId: string,
-  bands: BandsByTeller,
-  members: PeriodMember[],
-  fellowIds: ReadonlySet<string>,
-  distributionMode: string
-): Record<string, { WEEKEND: [number, number] }> {
-  const released = releasedWeekendDays(periodId);
-  const overrides: Record<string, { WEEKEND: [number, number] }> = {};
-  for (const m of members) {
-    if (!fellowIds.has(m.id)) continue;
-    overrides[m.id] = { WEEKEND: fellowWeekendBand(scaledBandForMember(bands, 'WEEKEND', m, distributionMode), released.get(m.id) ?? 0) };
-  }
-  return overrides;
 }
 
 export type BandOverridesInput = Partial<Record<'bandAvond' | 'bandWeekend' | 'bandFeestdag', [number, number]>>;
@@ -122,7 +138,7 @@ export function bandCheckForPeriod(periodId: string, typed: BandOverridesInput =
   const members = loadPeriodMembers(period);
   const fellowIds = getFellowIds(periodId);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(config, slotCountByTeller, members, fellowIds, distributionMode);
+  const targets = resolvePeriodTargets(config, slotCountByTeller, members, fellowIds, distributionMode);
 
   const balances: Record<string, Record<string, number>> = {};
   for (const row of db
@@ -137,11 +153,9 @@ export function bandCheckForPeriod(periodId: string, typed: BandOverridesInput =
   return {
     bereik_tekort: computeBandShortfall({
       config,
-      bands,
       slotCountByTeller,
       members,
-      balances,
-      bandOverrides: fellowBandOverrides(periodId, bands, members, fellowIds, distributionMode),
+      bands: memberBands(periodId, targets, members, fellowIds, distributionMode, balances),
       distributionMode,
     }),
   };

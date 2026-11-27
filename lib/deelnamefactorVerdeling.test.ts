@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PARTTIMEDAGEN_TELLEN, verdelingTekst, verdelingUitConfig } from './deelnamefactorVerdeling';
-import { scaledBandForMember, type BandsByTeller, type PeriodMember } from './rosterBands';
+import { scaledBandForMember, type PeriodBands, type PeriodMember } from './rosterBands';
 
 /**
  * The rule (1.1.2): Personeel beheren says the deelnamefactor counts exactly
@@ -8,7 +8,10 @@ import { scaledBandForMember, type BandsByTeller, type PeriodMember } from './ro
  * sentence cannot drift from what the roster does.
  */
 
-const bands: BandsByTeller = { AVOND: [10, 10], WEEKEND: [4, 4], FEESTDAG: [0, 1] };
+const bands: PeriodBands = {
+  bands: { AVOND: [10, 10], WEEKEND: [4, 4], FEESTDAG: [0, 1] },
+  aandeel: { AVOND: null, WEEKEND: null, FEESTDAG: null },
+};
 const lid = (deelnamefactor: number): PeriodMember => ({ id: 'x', deelnamefactor, dekking: 1 });
 
 describe('whether the deelnamefactor counts, in words', () => {

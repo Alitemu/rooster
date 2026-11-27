@@ -31,13 +31,15 @@ over.
 - A fellow may release weekend days (clear or mark them). A liever niet on
   a weekend day counts as released too, so the solver may give that day;
   asked after 1.3.0, the planner chose to leave this as it is. Bands: fellows
-  don't count for WEEKEND, so the others' band goes up at generation
-  (lib/rosterBands.ts `resolvePeriodBands`: a configured band scaled by
-  everyone / the non-fellows, both as effective headcounts, floor/ceil;
-  otherwise the default over the non-fellows). A fellow's own WEEKEND band is `[0, released days]`,
-  capped at the others' max, without the ledger (`fellowWeekendBand`),
-  sent to the solver as `band_overrides` - an optional SolverInput field
-  that replaces a person's scaled band and delta for one counter.
+  don't count for WEEKEND. A derived WEEKEND band is worked out over the
+  non-fellows (lib/rosterBands.ts `resolvePeriodTargets`); a band the
+  ruleset names stays as it is (2.5.0, the planner's choice "altijd
+  letterlijk", after being told weekend shifts can then stay empty: the
+  generation dialog's bereik-tekort says so before generating). Until
+  2.5.0 a named band was raised by everyone / the non-fellows with
+  floor/ceil, which made [1, 2] "1 tot en met 3". A fellow's own WEEKEND
+  band is `[0, released days]`, capped at the others' max, without the
+  ledger (`fellowWeekendBand`).
   `computeMemberTargets` is the one per-person target (publication check,
   band room in pick lists, "Jouw rooster", invitation indication).
   Carry-over: a fellow's weekend saldo waits; shifts taken anyway pay off
@@ -214,15 +216,38 @@ Audit 0.94.0 on top of that:
 
 ## Streefbereik, venster and the solver's phases
 
+- **Each person's band, 2.5.0.** Someone present the whole period at
+  factor 1 gets the period's band: the one the ruleset names, literally,
+  or the derived one. Everyone else (dekking below 1, or a deelnamefactor
+  below 1 under NAAR_RATO) gets their own share in proportion, rounded
+  once: `[floor(s), floor(s) + 1]`, s = the exact share (slots over the
+  effective headcount) times their factor, or the named band's midpoint
+  times it (`scaledBandForMember`). Before, both ends of the band were
+  scaled, the minimum down and the maximum up, at every factor: [2, 3] at
+  0.7 became "1 tot en met 3", a band of three values (the planner asked
+  how a range could be 3 to 5). Over the exact share the maximums still
+  add up to every shift and the minimums to no more than there are
+  (lib/calendarRules.test.ts, lib/rosterBands.test.ts); over a named
+  band that is the planner's, and lib/bandShortfall.ts says so.
+- **The app sends each person's band whole.** generate-roster sends
+  `band_overrides` for every member and every counter (lib/bandShortfall.ts
+  `memberBands`: scaledBandForMember plus the ledger delta, clamped at
+  none, a fellow's weekend their own). The solver takes an override as it
+  is (only shifts filled in by hand are taken off), so its own scaling of
+  band_avond/band_weekend/band_feestdag by coverage_factors and
+  participation_factors is not used for the achterwacht's roster: the
+  solver's code is unchanged (no change to the solver itself was needed),
+  the calculation lives in one place. solverContract.test.ts checks every
+  override against computeMemberTargets.
 - **Bands over the effective headcount.** The default band per teller is
   the period's slots over `effectiveHeadcount` (lib/rosterBands.ts: the
   sum of each member's coverage of the period, times the deelnamefactor
-  under NAAR_RATO), floor/ceil; scaledBandForMember then scales it per
-  person by the same two factors. Counting heads instead left shifts
+  under NAAR_RATO), floor and floor + 1. Counting heads instead left shifts
   empty: with people joining or leaving halfway everyone's maximum added
   up to fewer shifts than there were. `resolvePeriodBands(config,
-  slotCountByTeller, members, fellowIds, distributionMode)` is the
-  one entry point (generate-roster, computeMemberTargets, fellowSummary;
+  slotCountByTeller, members, fellowIds, distributionMode)` (the bands)
+  and `resolvePeriodTargets` (the bands with their exact share) are the
+  entry points (generate-roster, computeMemberTargets, fellowSummary;
   the capacity route's suggested band uses effectiveHeadcount too).
 - **One member per person, all memberships together.** `loadPeriodMembers`
   (lib/rosterBands.ts) is the one query for a period's participants:

@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.4.0. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.5.0. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -154,6 +154,11 @@ dus er gaat niets echt weg.
   persoon het bereik per soort in cijfers ("2 of 3", "0 of 1"). Bij wie een
   beginsaldo of correctie heeft, staat erbij hoeveel diensten extra of minder dat
   geeft.
+- [ ] **C9b2.** Kijk in dezelfde kolom bij iemand die maar een deel van de periode
+  meedraait (een *Geldig vanaf* halverwege), of bij *Naar rato* bij iemand met
+  deeltijd. Je ziet: het bereik is altijd twee getallen naast elkaar ("1 of 2"),
+  nooit drie of meer ("1 tot en met 3"). Wie de hele periode meedraait, heeft precies
+  het bereik dat bij de periode is ingesteld, ook als er fellows zijn.
 - [ ] **C9c.** Open bij *Dienstrooster* het tabblad *Dienstdoende*. Je ziet: onder
   elke balk het streefbereik tussen blokhaken, ook bij wie geen dienst heeft. Bij
   avond- en weekenddiensten een gestippeld vak over de balk, bij feestdagen niet.

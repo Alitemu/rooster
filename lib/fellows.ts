@@ -20,8 +20,9 @@
  * (lib/fellowBlocks.ts restoreFellowBlocks), so it never turns open by
  * itself.
  *
- * Fellows don't count for the weekend band of the others, so theirs goes
- * up automatically at generation (resolvePeriodBands).
+ * Fellows don't count for the weekend band of the others: a derived one is
+ * worked out over the non-fellows, a band the ruleset names stays as it is
+ * (2.5.0, resolvePeriodTargets).
  *
  * Per period only: nothing carries over to the next one.
  */

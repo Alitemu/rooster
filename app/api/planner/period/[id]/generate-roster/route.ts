@@ -16,7 +16,7 @@ import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
   loadPeriodMembers,
-  resolvePeriodBands,
+  resolvePeriodTargets,
   resolveRulesetConfig,
   resolveWindowWeeks,
   type PeriodMember,
@@ -43,7 +43,7 @@ import { refreshCarryOverForPeriod } from '@/lib/carryOver';
 import { findPreviousPublishedPeriod, refreshDerivedPriorAssignments } from '@/lib/previousPeriod';
 import { clearPendingUndo } from '@/lib/pendingUndo';
 import { feestdagTargets } from '@/lib/feestdagHistory';
-import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
+import { computeBandShortfall, memberBands } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isBetterRoster, isPerfectRoster } from '@/lib/rosterVergelijk';
 import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
@@ -447,20 +447,26 @@ async function runGeneration(args: {
     for (const s of allSlots) {
       if (s.teller in slotCountByTeller) slotCountByTeller[s.teller as Teller]++;
     }
-    // Fellows (lib/fellows.ts) don't count for the weekend: the others'
-    // WEEKEND band goes up (resolvePeriodBands), and each fellow gets a
-    // band of their own through band_overrides - 0 up to the weekend days
-    // they left unblocked, no ledger delta.
+    // Fellows (lib/fellows.ts) don't count for the weekend: a derived
+    // WEEKEND band is worked out over the others (resolvePeriodTargets; a
+    // band the ruleset names stays as it is, 2.5.0), and each fellow gets a
+    // band of their own - 0 up to the weekend days they left unblocked, no
+    // ledger delta.
     const fellowIds = getFellowIds(periodId);
     const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-    const bands = resolvePeriodBands(
+    const periodTargets = resolvePeriodTargets(
       config,
       slotCountByTeller,
       poolMembers,
       fellowIds,
       distributionMode
     );
-    const bandOverrides = fellowBandOverrides(periodId, bands, poolMembers, fellowIds, distributionMode);
+    const bands = periodTargets.bands;
+    // Everyone's own band, the delta folded in, sent whole as band_overrides
+    // (2.5.0): the solver takes it as it is, so it holds each person to the
+    // band the planner sees, worked out once, here (lib/rosterBands.ts
+    // scaledBandForMember).
+    const bandOverrides = memberBands(periodId, periodTargets, poolMembers, fellowIds, distributionMode, balances);
 
     // What the streefbereik allows at most per counter, everyone together,
     // next to how many shifts there are (lib/bandShortfall.ts, the same
@@ -469,11 +475,9 @@ async function runGeneration(args: {
     // planner should be told that rather than "not enough people".
     const bereikTekort = computeBandShortfall({
       config,
-      bands,
       slotCountByTeller,
       members: poolMembers,
-      balances,
-      bandOverrides,
+      bands: bandOverrides,
       distributionMode,
     });
     // Members whose Geldig vanaf/tot covers only part of the period: their
