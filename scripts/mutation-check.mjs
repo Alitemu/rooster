@@ -350,6 +350,31 @@ const MUTATIONS = [
     tests: ['app/api/planner/period/[id]/import-balances'],
   },
   // 2.5.0: each person's band, worked out once in the app and sent to the solver whole.
+  // The solver's side of it: band_overrides carries every member's band since 2.5.0 (it was a fellow's weekend only).
+  {
+    name: 'solver 2.5.0: the hard band ignores band_overrides',
+    file: 'solver/constraints.py',
+    find: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None:',
+    replace: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None and False:',
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'band_override'],
+  },
+  {
+    name: 'solver 2.5.0: the band cost ignores band_overrides',
+    file: 'solver/objective.py',
+    find: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None:',
+    replace: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None and False:',
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'band_override'],
+  },
+  {
+    name: 'solver 2.5.0: the greedy planner ignores band_overrides',
+    file: 'solver/greedy.py',
+    find: '        override = band_overrides.get(person_id, {}).get(counter)\n        if override is not None:',
+    replace: '        override = band_overrides.get(person_id, {}).get(counter)\n        if override is not None and False:',
+    runner: 'pytest',
+    tests: ['test_greedy.py', '-k', 'band_override'],
+  },
   {
     name: 'rosterBands 2.5.0: someone present the whole period does not get the configured band literally',
     file: 'lib/rosterBands.ts',
