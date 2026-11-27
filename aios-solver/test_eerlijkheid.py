@@ -123,6 +123,22 @@ def test_a_feestdag_debt_is_not_level_with_a_fair_share(seed):
     assert schuld.feestdagdiensten == 0, schuld.feestdagdiensten
 
 
+@pytest.mark.parametrize('seed', [1, 2, 3])
+def test_a_feestdag_share_below_a_whole_dienst_still_counts(seed):
+    """3 feestdagdiensten over two AIOS, of which they can do one (the night through it; rest rules leave the rest).
+    1,5 each, 0,4 and 0,2 with what they had too many before: both none as a whole dienst, so who gets the one would
+    be a tie. In hundredths it goes to who is nearer to it. Once each way round, so a tie broken the same way can't
+    pass both."""
+    for meer, minder in (('x', 'y'), ('y', 'x')):
+        inp = weken(1, {dag(1)})
+        aios(inp, 'x', feestdag_achterstand=-1.1 if meer == 'x' else -1.3)
+        aios(inp, 'y', feestdag_achterstand=-1.1 if meer == 'y' else -1.3)
+        inp['seed'] = seed
+        uit, _ = los_op(inp)
+        assert _per(uit, meer).doel_feestdagdiensten == pytest.approx(0.4, abs=0.005)
+        assert _per(uit, minder).doel_feestdagdiensten == pytest.approx(0.2, abs=0.005)
+        assert (_per(uit, meer).feestdagdiensten, _per(uit, minder).feestdagdiensten) == (1, 0), meer
+
 def test_one_block_in_four_weeks_where_it_can():
     # Eight weekly evening blocks for two AIOS, each wanting four in a row:
     # spread out, every other week, not four or three in a row.

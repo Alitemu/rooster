@@ -3073,7 +3073,9 @@ const MUTATIONS = [
     replace: "df = 100 * round(doel_feest[a.id])",
     runner: 'pytest',
     cwd: 'aios-solver',
-    tests: ["test_eerlijkheid.py", "-k", "feestdag_debt"],
+    // feestdag_debt alone no longer catches it since the debt is no longer held at none (-1,5 rounds to -2, still
+    // below a fair share): the shares 0,4 and 0,2, both none as a whole dienst, do (2.4.0).
+    tests: ["test_eerlijkheid.py", "-k", "feestdag_debt or feestdag_share_below"],
   },
   // Not mutated: the share per soort in hundredths (0.111.0) only refines which of two near-equal rosters is chosen; no
   // roster of the tests changes with whole numbers. The feestdag share, where a small share made it matter, is mutated above.
