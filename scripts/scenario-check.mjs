@@ -292,13 +292,15 @@ for (const objectiveMode of MODES) {
     // choice, "altijd letterlijk"): the 14 others together may do exactly as many weekend shifts as there are, with no
     // room at all. At window 2 a method may then leave a weekend dienst empty (lexicographic left 2 in the 2.5.0 gate);
     // the planner sees who is short and fills it by hand ("het maken van het rooster blijft handwerk"). So there a
-    // weekend dienst left empty is a warning, and anything else empty still fails.
+    // weekend dienst left empty is a warning, and anything else empty still fails. A feestdag shares the weekend's
+    // window (one group), so a weekend with no room pushes a feestdag out too: the follow-up run of the 2.5.0 gate
+    // left a Saturday and Koningsdag empty, with room enough for feestdagen (15 x 1 for 7).
     const zonderRuimte = weekendZonderRuimte() && windowWeeks >= 2;
-    const alleenWeekend = r.unfilled_slots.every((u) => u.teller === 'WEEKEND');
+    const alleenWeekend = r.unfilled_slots.every((u) => u.teller === 'WEEKEND' || u.teller === 'FEESTDAG');
     (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) || (zonderRuimte && alleenWeekend) ? warn : rec)(
       `${label}: every dienst filled`,
       r.unfilled_slots.length === 0,
-      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}${zonderRuimte && r.unfilled_slots.length > 0 && alleenWeekend ? ', alleen weekenddiensten: het weekendbereik laat geen ruimte' : ''}`
+      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}${zonderRuimte && r.unfilled_slots.length > 0 && alleenWeekend ? ', alleen weekend- en feestdagdiensten: het weekendbereik laat geen ruimte' : ''}`
     );
     rec(`${label}: the explanation never claims more than is empty`, tekort <= r.unfilled_slots.length, `tekort ${tekort}`);
 
