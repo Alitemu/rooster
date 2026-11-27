@@ -1768,3 +1768,25 @@ def test_band_override_ignores_the_ledger_delta():
 
     assert result['assignments'] == []
     assert result['diagnostics']['violations']['band_limit'] == 0
+
+
+def test_band_override_sets_the_middle_the_balance_pulls_to():
+    """
+    2.5.0: the app sends every member's band through band_overrides, so the
+    pull toward the middle of a band (objective.py add_band_imbalance)
+    reads the override too, not band_ranges. p1 and p2 both have [0, 2],
+    middle 1, and p2 a voorkeur for both shifts; band_ranges say [0, 0].
+    Toward the override's middle one shift each costs nothing and two for
+    p2 more than the voorkeur is worth: 1 and 1. Toward band_ranges' middle
+    every split is as far off, and the voorkeur would give both to p2.
+    """
+    slots = make_slots(2, teller='AVOND')
+    band = {'AVOND': [0, 0], 'WEEKEND': [0, 0], 'FEESTDAG': [0, 0]}
+    result = solve(
+        ['p1', 'p2'], slots, window_weeks=0, band=band,
+        preferred={('p2', s['id']): 1.0 for s in slots},
+        band_overrides={'p1': {'AVOND': (0, 2)}, 'p2': {'AVOND': (0, 2)}},
+    )
+
+    per_person = {p: len(w) for p, w in weeks_by_person(result, slots).items()}
+    assert per_person == {'p1': 1, 'p2': 1}, per_person

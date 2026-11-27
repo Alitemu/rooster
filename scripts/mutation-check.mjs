@@ -360,7 +360,7 @@ const MUTATIONS = [
     tests: ['test_solver.py', '-k', 'band_override'],
   },
   {
-    name: 'solver 2.5.0: the band cost ignores band_overrides',
+    name: 'solver 2.5.0: the pull toward the middle of a band ignores band_overrides',
     file: 'solver/objective.py',
     find: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None:',
     replace: '                override = overrides.get(person_id, {}).get(counter)\n                if override is not None and False:',
