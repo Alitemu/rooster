@@ -1234,9 +1234,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                   hieronder.
                 </p>
               ) : (
-                <p className="text-xs text-center text-neutral-500">
-                  Dit kan tot {zoektijdWoorden(pendingTimeLimitSeconds ?? STANDAARD_ZOEKTIJD_SECONDEN)} duren. Je kunt dit
-                  scherm open laten staan of later terugkomen.
+                // The search time only where one was chosen (2.6.2): Herhaalplanner and the Gerandomiseerde planner
+                // send none and can take far longer than the default, which this said for them too.
+                <p className="text-xs text-center text-neutral-500" data-testid="genereer-wacht">
+                  {pendingTimeLimitSeconds !== null ? `Dit kan tot ${zoektijdWoorden(pendingTimeLimitSeconds)} duren. ` : ''}
+                  Je kunt dit scherm open laten staan of later terugkomen.
                 </p>
               )}
             </div>

@@ -55,3 +55,38 @@ test('the search time is chosen before generating and sent with it', async ({ pa
   await expect.poll(() => verzonden.length).toBe(1);
   expect(verzonden[0]).toEqual({ time_limit_seconds: 2700 });
 });
+
+/**
+ * 2.6.2 (the audit after 2.6.1): while it runs, the dialog says how long it can take only where a search time was
+ * chosen. It said "Dit kan tot 10 minuten duren" for the Herhaalplanner too, which repeats a solve and can take far
+ * longer. The run itself is answered here, never started: RUNNING, without progress yet.
+ */
+test('the waiting text names the chosen time, and none for the Herhaalplanner', async ({ page }) => {
+  await page.route('**/generate-roster', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { job_id: 'wacht-test' } }) });
+  });
+  await page.route('**/generate-roster/status**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: { status: 'RUNNING' } }) })
+  );
+
+  await loginAsPlanner(page);
+  const openDialoog = async () => {
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await openOnderdeel(page, 'Periode');
+    await page.getByRole('button', { name: /Rooster genereren met solver/ }).first().click();
+    return page.getByRole('dialog', { name: 'Rooster genereren' });
+  };
+
+  let dialoog = await openDialoog();
+  await dialoog.getByTestId('zoektijd-keuze').getByLabel('Hoe lang zoeken').selectOption('900');
+  await dialoog.getByRole('button', { name: 'Genereren' }).click();
+  await expect(dialoog.getByTestId('genereer-wacht')).toHaveText('Dit kan tot 15 minuten duren. Je kunt dit scherm open laten staan of later terugkomen.');
+
+  dialoog = await openDialoog();
+  await dialoog.getByRole('button', { name: 'Tonen' }).click();
+  await dialoog.getByRole('radio', { name: /Herhaalplanner/ }).check();
+  await expect(dialoog.getByTestId('zoektijd-keuze')).toHaveCount(0);
+  await dialoog.getByRole('button', { name: 'Genereren' }).click();
+  await expect(dialoog.getByTestId('genereer-wacht')).toHaveText('Je kunt dit scherm open laten staan of later terugkomen.');
+});

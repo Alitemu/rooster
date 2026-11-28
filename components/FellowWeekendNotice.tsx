@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { telwoord } from '@/lib/telwoord';
+import { weekendBereikTekst } from '@/lib/bereikKort';
 
 interface Summary {
   fellows: Array<{ person_id: string; codenaam: string; vrije_weekenddagen: number }>;
@@ -29,9 +30,6 @@ interface Summary {
 
 const weken = (n: number) => telwoord(n, 'week', 'weken');
 const personen = (n: number) => telwoord(n, 'persoon', 'mensen');
-const bereikTekst = ([min, max]: [number, number]) =>
-  min === max ? telwoord(min, 'weekenddienst', 'weekenddiensten') : `${min} tot ${max} weekenddiensten`;
-
 export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: string; vensterWeekend: number }) {
   const [summary, setSummary] = useState<Summary | null>(null);
 
@@ -64,8 +62,8 @@ export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: st
       </p>
       <p>
         {verhoogd
-          ? `Het weekendbereik van de anderen gaat bij het genereren daarom van ${bereikTekst(weekend.bereik_zonder_fellows)} naar ${bereikTekst(weekend.bereik)}.`
-          : `Het weekendbereik van de anderen blijft ${bereikTekst(weekend.bereik)}.`}
+          ? `Het weekendbereik van de anderen gaat bij het genereren daarom van ${weekendBereikTekst(weekend.bereik_zonder_fellows)} naar ${weekendBereikTekst(weekend.bereik)}.`
+          : `Het weekendbereik van de anderen blijft ${weekendBereikTekst(weekend.bereik)}.`}
       </p>
       <p className={weekend.past ? '' : 'font-semibold'}>
         {weekend.past

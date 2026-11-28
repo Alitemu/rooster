@@ -10,6 +10,7 @@
  * 2.3.0 ("hoogstens 1" became "0 of 1", the planner's choice: the same form under every bar).
  */
 import { TELLERS, type MemberTarget, type Teller } from '@/lib/rosterBands';
+import { bereikKort } from '@/lib/bereikKort';
 
 export interface BereikCel {
   tekst: string;
@@ -19,30 +20,26 @@ export interface BereikCel {
 
 export type StreefbereikRij = Record<Teller, BereikCel>;
 
-/** "2 of 3", "0 of 1", "2", "2 tot en met 5": the range without the noun, for a table cell, always in numbers. */
-export function bereikKort(min: number, max: number): string {
-  if (min === max) return String(max);
-  return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;
-}
+/** "2 of 3", "0 of 1", "2", "2 tot en met 5": the range without the noun, for a table cell, always in numbers (lib/bereikKort.ts). */
+export { bereikKort };
 
 /**
  * 2.6.1: someone there part of the period, or part-time under naar rato, has a basis of their own ("1 of 2" next to
- * the others' "2 of 3"), and the table says why: "naar rato (71%)". Without it the planner saw a smaller range and
- * no reason.
+ * the others' "2 of 3"), and the table says why. 2.6.2: as its own part, "naar rato 71%", since the table puts the
+ * whole explanation in brackets: "naar rato (71%)" read "(naar rato (71%))" (the audit after 2.6.1).
  */
-function naarRato(t: MemberTarget): string {
-  return t.factor !== undefined && t.factor < 1 ? ` naar rato (${Math.round(t.factor * 100)}%)` : '';
-}
-
 export function bereikCel(t: MemberTarget): BereikCel {
   const tekst = bereikKort(t.min, t.max);
   if (t.fellow) return { tekst, toelichting: 'fellow: geen weekenddienst verwacht' };
   const saldo = t.saldo ?? 0;
-  const rato = naarRato(t);
-  if (saldo === 0) return { tekst, toelichting: rato ? rato.trim() : null };
-  const n = Math.abs(saldo);
-  const basis = t.basis ? `basis ${bereikKort(t.basis[0], t.basis[1])}${rato}, ` : '';
-  return { tekst, toelichting: `${basis}${n} ${n === 1 ? 'dienst' : 'diensten'} ${saldo > 0 ? 'extra' : 'minder'} uit het saldo` };
+  const delen: string[] = [];
+  if (saldo !== 0 && t.basis) delen.push(`basis ${bereikKort(t.basis[0], t.basis[1])}`);
+  if (t.factor !== undefined && t.factor < 1) delen.push(`naar rato ${Math.round(t.factor * 100)}%`);
+  if (saldo !== 0) {
+    const n = Math.abs(saldo);
+    delen.push(`${n} ${n === 1 ? 'dienst' : 'diensten'} ${saldo > 0 ? 'extra' : 'minder'} uit het saldo`);
+  }
+  return { tekst, toelichting: delen.length > 0 ? delen.join(', ') : null };
 }
 
 export function streefbereikRij(target: Record<Teller, MemberTarget>): StreefbereikRij {

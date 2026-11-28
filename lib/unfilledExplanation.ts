@@ -12,6 +12,8 @@
  * Pure, no db: used by the client dialog and tested on its own.
  */
 
+import { bereikKort } from './bereikKort';
+
 export interface UnfilledSlotInfo {
   datum: string | null;
   teller: string | null;
@@ -64,15 +66,9 @@ export function explainBereikTekort(bereikTekort: BereikTekort): string[] {
     });
 }
 
-/** "4 of 5", "4", "4 tot en met 6": as everywhere else (lib/streefbereikPerPersoon.ts bereikKort), not "4 tot 5" (2.6.1). */
-function bereikWoorden([min, max]: [number, number]): string {
-  if (min === max) return String(max);
-  return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;
-}
-
 function advies(voorstel: [number, number] | undefined, soort: string): string {
   return voorstel
-    ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${bereikWoorden(voorstel)} ${soort} per persoon.`
+    ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${bereikKort(voorstel[0], voorstel[1])} ${soort} per persoon.`
     : 'Verhoog het bereik onder Venster en streefbereik.';
 }
 

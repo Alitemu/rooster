@@ -372,11 +372,11 @@ const MUTATIONS = [
     tests: ['lib/unfilledExplanation'],
   },
   {
-    name: 'unfilledExplanation 2.6.1: the advice says "4 tot 5" again',
-    file: 'lib/unfilledExplanation.ts',
+    name: 'bereikKort 2.6.2: a range says "4 tot 5" again',
+    file: 'lib/bereikKort.ts',
     find: "  return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;",
     replace: "  return `${min} tot ${max}`;",
-    tests: ['lib/unfilledExplanation'],
+    tests: ['lib/bereikKort', 'lib/unfilledExplanation', 'lib/streefbereikPerPersoon'],
   },
   {
     name: 'publicationCheck 2.6.1: the warning says "3 tot 4" again',
@@ -388,8 +388,8 @@ const MUTATIONS = [
   {
     name: 'streefbereikPerPersoon 2.6.1: naar rato is not said',
     file: 'lib/streefbereikPerPersoon.ts',
-    find: "  return t.factor !== undefined && t.factor < 1 ? ` naar rato (${Math.round(t.factor * 100)}%)` : '';",
-    replace: "  return '';",
+    find: "  if (t.factor !== undefined && t.factor < 1) delen.push(`naar rato ${Math.round(t.factor * 100)}%`);",
+    replace: "",
     tests: ['lib/streefbereikPerPersoon'],
   },
   {
@@ -8266,7 +8266,7 @@ const MUTATIONS = [
   },
   {
     name: "2.3.0: the range under the bar says 'hoogstens 1' again",
-    file: "lib/streefbereikPerPersoon.ts",
+    file: "lib/bereikKort.ts",
     find: "  if (min === max) return String(max);\n  return max - min === 1",
     replace: "  if (min <= 0 && max > 0) return `hoogstens ${max}`;\n  if (min === max) return String(max);\n  return max - min === 1",
     tests: ["lib/streefbereikPerPersoon", "app/api/planner/period/[id]/import-balances/achteraf"],

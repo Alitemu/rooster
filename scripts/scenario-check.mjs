@@ -188,15 +188,6 @@ rec('Period created', !!periodId, `status=${created.status}`);
 const capacity = await req('GET', `/api/periods/${periodId}/capacity?window_weeks=2&start_datum=${START}&eind_datum=${END}`, { jar: planner });
 const suggested = capacity.json?.data?.suggested_band;
 rec('The wizard suggests a streefbereik for 15 people', !!suggested, JSON.stringify(suggested));
-// Whether the non-fellows' weekend maximums together are exactly the weekend shifts (2.5.0): the configured band
-// stays as it is with a fellow, so there is no room left.
-function weekendZonderRuimte() {
-  const weekend = db
-    .prepare(`SELECT COUNT(*) n FROM dienstrooster_shift_slot s JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id WHERE s.period_id = ? AND st.teller = 'WEEKEND'`)
-    .get(periodId).n;
-  const fellows = db.prepare('SELECT COUNT(*) n FROM dienstrooster_period_fellow WHERE period_id = ?').get(periodId).n;
-  return fellows > 0 && Array.isArray(suggested?.WEEKEND) && (people.length - fellows) * suggested.WEEKEND[1] <= weekend;
-}
 const opened = await req('POST', `/api/periods/${periodId}/open`, {
   jar: planner,
   body: {
@@ -249,6 +240,32 @@ const pattern = await req('POST', `/api/person/${fellow}/parttime-patterns`, {
 rec('…and has Mondays off (part-time)', pattern.status === 201, `status=${pattern.status}`);
 rec('Period closed', (await req('POST', `/api/periods/${periodId}/close`, { jar: planner })).status === 200);
 
+// ---------- THE STREEFBEREIK WITH THE FELLOW (2.6.2) ----------
+// The wizard's weekend band was for all 15. With the fellow the other 14 may together do 14 x its maximum, which a
+// configured band keeps as it is (2.5.0, the planner's choice): exactly the weekend shifts or fewer, no room. The
+// generation dialog says so since 2.6.1 and offers the band over the non-fellows, which a planner takes, as here.
+// Without it lexicographic left weekend diensten empty at window 2, and the longer tries in vain took the full run
+// from 35 minutes to two hours (2.5.0 and 2.6.0 gates). Whether there is room depends on the year the period falls in
+// (ANKER): with room as it is, nothing is offered and nothing is taken.
+const voorTekort = await req('GET', `/api/planner/period/${periodId}/band-check`, { jar: planner });
+const weekendRuimte = voorTekort.json?.data?.bereik_tekort?.WEEKEND;
+if (weekendRuimte) {
+  rec(
+    'The dialog says the weekend band leaves too little room with the fellow, and offers one that does',
+    weekendRuimte.maximaal <= weekendRuimte.diensten && Array.isArray(weekendRuimte.voorgesteld) && weekendRuimte.voorgesteld[1] > suggested.WEEKEND[1],
+    JSON.stringify(weekendRuimte)
+  );
+  const overgenomen = await req('PATCH', `/api/periods/${periodId}/ruleset`, { jar: planner, body: { bandWeekend: weekendRuimte.voorgesteld } });
+  const naTekort = await req('GET', `/api/planner/period/${periodId}/band-check`, { jar: planner });
+  rec(
+    '…the planner takes it, and the weekend has room',
+    overgenomen.status === 200 && naTekort.status === 200 && !naTekort.json?.data?.bereik_tekort?.WEEKEND,
+    `status=${overgenomen.status} ${JSON.stringify(naTekort.json?.data?.bereik_tekort)}`
+  );
+} else {
+  rec('The weekend band leaves room with the fellow as it is', voorTekort.status === 200, `status=${voorTekort.status}`);
+}
+
 // ---------- EVERY METHOD, SEVERAL WINDOWS ----------
 const overBand = () =>
   JSON.parse(
@@ -288,19 +305,10 @@ for (const objectiveMode of MODES) {
     // dienst another method fills (audit 9: Pinksterzondag at window 2).
     // "Herhaalplanner" runs 3 attempts here, where the dialog runs up to
     // 100: at window 2 those 3 may leave a dienst too (audit 14).
-    // 2.5.0: the weekend band the wizard suggested for all 15 stays as it is now that one is a fellow (the planner's
-    // choice, "altijd letterlijk"): the 14 others together may do exactly as many weekend shifts as there are, with no
-    // room at all. At window 2 a method may then leave a weekend dienst empty (lexicographic left 2 in the 2.5.0 gate);
-    // the planner sees who is short and fills it by hand ("het maken van het rooster blijft handwerk"). So there a
-    // weekend dienst left empty is a warning, and anything else empty still fails. A feestdag shares the weekend's
-    // window (one group), so a weekend with no room pushes a feestdag out too: the follow-up run of the 2.5.0 gate
-    // left a Saturday and Koningsdag empty, with room enough for feestdagen (15 x 1 for 7).
-    const zonderRuimte = weekendZonderRuimte() && windowWeeks >= 2;
-    const alleenWeekend = r.unfilled_slots.every((u) => u.teller === 'WEEKEND' || u.teller === 'FEESTDAG');
-    (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) || (zonderRuimte && alleenWeekend) ? warn : rec)(
+    (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) ? warn : rec)(
       `${label}: every dienst filled`,
       r.unfilled_slots.length === 0,
-      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}${zonderRuimte && r.unfilled_slots.length > 0 && alleenWeekend ? ', alleen weekend- en feestdagdiensten: het weekendbereik laat geen ruimte' : ''}`
+      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}`
     );
     rec(`${label}: the explanation never claims more than is empty`, tekort <= r.unfilled_slots.length, `tekort ${tekort}`);
 

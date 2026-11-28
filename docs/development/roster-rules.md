@@ -44,7 +44,10 @@ over.
   enough on paper), yet at window 2 a method can leave a weekend dienst
   empty. Asked again with that in hand, the planner kept it: "het maken
   van het rooster blijft handwerk", the Dienstdoende tab shows who is
-  short. scripts/scenario-check.mjs warns there instead of failing. A fellow's own WEEKEND
+  short. scripts/scenario-check.mjs, which met it at window 2 and spent
+  its longer tries in vain (35 minutes became two hours), takes the band
+  the dialog offers since 2.6.2, as a planner would: every dienst filled is
+  a hard check again; the case without room is lib/bandShortfall.test.ts's. A fellow's own WEEKEND
   band is `[0, released days]`, capped at the others' max, without the
   ledger (`fellowWeekendBand`).
   `computeMemberTargets` is the one per-person target (publication check,
@@ -245,8 +248,10 @@ Audit 0.94.0 on top of that:
   their maximum, and shifts can stay empty all the same (the 2.5.0
   scenario). explainGeenRuimte says so, in the dialog and after a
   generation; generating is not stopped. The table's explanation says
-  "naar rato (71%)" for someone counting below 1 (MemberTarget.factor), and
-  the publication warning names the period's band as "3 of 4".
+  "naar rato 71%" for someone counting below 1 (MemberTarget.factor; 2.6.1
+  wrote "(71%)", which the table's own brackets made "(naar rato (71%))"),
+  and the publication warning names the period's band as "3 of 4". One
+  wording for a range on the planner's screens since 2.6.2: lib/bereikKort.ts.
 - **The app sends each person's band whole.** generate-roster sends
   `band_overrides` for every member and every counter (lib/bandShortfall.ts
   `memberBands`: scaledBandForMember plus the ledger delta, clamped at

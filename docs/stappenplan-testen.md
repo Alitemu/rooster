@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.6.1. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.6.2. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 

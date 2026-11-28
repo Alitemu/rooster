@@ -27,8 +27,8 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
   app/api/aios, app/aios, components/Aios*), docs/development/diensten.md
   "Copied, not changed". Shared: the login, the database, the Gmail
   account. The AIOS gets its own solver in its own container; the
-  achterwacht's solver is not changed without the user's say (0.905.0:
-  only its time bound, 10 to 30 minutes, their choice).
+  achterwacht's solver is not changed without the user's say (0.905.0
+  and 2.6.0: only its time bound, now up to 60 minutes, their choice).
 - The repository is public: no organisation names, domains, e-mail
   addresses, IP addresses, internal paths or real names of people anywhere
   in it (code, docs, tests, commit messages). Files the user shares

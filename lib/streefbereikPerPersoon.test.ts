@@ -55,7 +55,7 @@ describe('the streefbereik per person (2.2.0)', () => {
   });
 });
 
-describe('naar rato in the table (2.6.1)', () => {
+describe('naar rato in the table (2.6.1, 2.6.2)', () => {
   const deel = (min: number, max: number, factor: number | undefined, saldo = 0, basis: [number, number] = [min, max]) => ({
     min,
     max,
@@ -66,8 +66,12 @@ describe('naar rato in the table (2.6.1)', () => {
   });
 
   it('says why someone there part of the period has a smaller range', () => {
-    expect(bereikCel(deel(1, 2, 0.714)).toelichting).toBe('naar rato (71%)');
-    expect(bereikCel(deel(3, 4, 0.5, 2, [1, 2])).toelichting).toBe('basis 1 of 2 naar rato (50%), 2 diensten extra uit het saldo');
+    expect(bereikCel(deel(1, 2, 0.714)).toelichting).toBe('naar rato 71%');
+    expect(bereikCel(deel(3, 4, 0.5, 2, [1, 2])).toelichting).toBe('basis 1 of 2, naar rato 50%, 2 diensten extra uit het saldo');
+    // The table puts the explanation in brackets: no brackets of its own inside (2.6.2).
+    for (const t of [deel(1, 2, 0.714), deel(3, 4, 0.5, 2, [1, 2]), deel(2, 3, undefined, -1, [3, 4])]) {
+      expect(bereikCel(t).toelichting ?? '').not.toMatch(/[()]/);
+    }
   });
 
   it('says nothing of it for someone there the whole period', () => {

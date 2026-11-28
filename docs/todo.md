@@ -11,6 +11,7 @@ bij dat toch niet hoeft, haal het dan weg.
 | De naam van de periode ook in de blauwe balk op de pagina's achter de periode (een persoon, lege diensten aanvullen, eerdere toewijzingen) | Planner van de achterwacht | In 1.12.0 staat de naam alleen op de periodepagina zelf in de balk. De andere pagina's hebben hun eigen kop | 1.12.0 |
 | Nieuwe indeling: het eerste onderdeel verspringt even bij een rooster met lege diensten | Planner van de achterwacht | Het aantal lege diensten komt 50 ms na de rest binnen. Zo kort dat het niet stoort. Oplossen kost een wachtmoment voor iedereen | 1.10.0 |
 | Een ingesteld streefbereik van drie of meer getallen (zoals 2 tot en met 4) naar rato laten meeschalen voor wie een deel van de periode meedraait. Nu krijgt die persoon x of x+1, ook bij één dag afwezigheid | Planner van de achterwacht | Het streefbereik is in principe altijd x of x+1, dus dit speelt zelden. Gevonden bij de audit na 2.6.0 | 2.6.0 |
+| Het streefbereik per persoon bewaren bij het genereren, zoals de deelnamefactor al wordt bewaard. Dan beoordelen Dienstdoende, *Jouw rooster*, de controle bij publiceren en de overloop een rooster altijd met het bereik waarmee het gemaakt is, ook na een nieuwe regel of een lidmaatschap dat achteraf wordt aangepast | Planner van de achterwacht | Nu geen probleem: er is geen oude periode, en het huidige rooster wordt opnieuw gemaakt met de nieuwe versie. Gevonden bij de audit na 2.6.1 | 2.6.1 |
 
 Wat er voor het rooster van de AIOS nog openstaat, staat onderaan
 `docs/aios-rooster.md`.
