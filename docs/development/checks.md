@@ -41,6 +41,14 @@ opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
   own period/assignments fixture per file (`tests/e2e/setup.ts`), so it does
   not read the seeded period, only the pool and shift types it finds.
+  Playwright acts faster than a person: a dialog that stays mounted while
+  closed and wipes its state in an effect after opening shows the previous
+  state until that wipe, and a choice made in that moment is lost to it
+  (tests/e2e/swap-multi.e2e.ts hung on it once in a full run, 2.6.3). Mount
+  the form per opening instead (components/SwapRequestDialog.tsx). What a
+  page shows for one moment only is seen with a MutationObserver installed
+  before the click (tests/e2e/ruilvenster-openen.e2e.ts): a look after the
+  opening comes too late.
 - `node scripts/full-check.mjs` - the API lifecycle against real data,
   including the solver's own hard rules on its untouched output (no
   ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
@@ -67,9 +75,13 @@ opens a "choose a new password" session (see Authentication):
   counts days, window 2 for these 15 people needs more than 120 seconds
   (audit 14). "Willekeurig" leaving a dienst is a warning, not a failure,
   and so is "Herhaalplanner" at window 2 (3 attempts here, up to 100 in
-  the dialog). Lexicographic at window 2 leaves 1 or 2 diensten empty on
-  OR-Tools 9.8, even after trying longer: a known result since audit 14,
-  in the achterwacht's solver, which stays as it is.
+  the dialog). Lexicographic at window 2 fills everything after trying
+  longer once or twice. Once the fellow is ticked, the scenario asks the
+  band check and takes the weekend band the dialog offers when the
+  wizard's leaves the 14 others no room, as a planner would (2.6.2, the
+  user's choice): from 2.5.0 the configured band is literal for whoever
+  is there the whole period, so with it two weekend diensten stayed empty
+  at window 2 and the tries in vain made the full run two hours.
 
 **Full or short scenario-check.** The full run takes about 35 minutes
 (13 generations of 120 seconds or more); the other browser checks take

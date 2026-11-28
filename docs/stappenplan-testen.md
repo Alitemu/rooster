@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.6.2. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.6.3. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -185,6 +185,10 @@ dus er gaat niets echt weg.
 
 - [ ] **D1.** Als medewerker: *+ Ruilverzoek* indienen voor een dienst in een
   definitief rooster. Bij een voorlopig rooster kan het niet.
+- [ ] **D1b.** Open *+ Ruilverzoek* nog eens, kies een dienst en klik *Annuleren*.
+  Open het opnieuw. Je ziet: het venster is leeg, ook niet heel even met de
+  vorige keuze. Bij *Dienst die je wilt* staat *Kies een dienst*, niet
+  *Collega's laden…*.
 - [ ] **D2.** Open de link van de collega. Je ziet: naast *Ruilen* staat dat er een
   verzoek op antwoord wacht en de lijst staat al open. *Goedkeuren* vraagt eerst
   om bevestiging. Kies *Ja, ruilen*. Je ziet: de diensten zijn gewisseld in het

@@ -71,7 +71,18 @@ function formatDatum(datum: string): string {
   return isoNaarInvoer(datum);
 }
 
-export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {
+/**
+ * A fresh form at every opening (2.6.3): while closed, nothing of it stays mounted. It used to stay mounted
+ * and wipe its state in an effect after opening, so the previous choice was on screen again until that
+ * wipe: a choice made in that moment was lost to it (tests/e2e/swap-multi.e2e.ts hung on it once in a
+ * full run), and the field for the colleague's shift said "Collega's laden…" until a shift was chosen again.
+ */
+export function SwapRequestDialog(props: Props) {
+  if (!props.isOpen) return null;
+  return <SwapRequestForm {...props} />;
+}
+
+function SwapRequestForm({ personId, periodId, onClose, onSuccess }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [candidatesLoading, setCandidatesLoading] = useState(false);
@@ -85,19 +96,6 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const [contacts, setContacts] = useState<{ planner: string | null }>({ planner: null });
 
   useEffect(() => {
-    if (!isOpen) return;
-
-    // This component never unmounts between opens (isOpen just toggles
-    // its own rendering), so without an explicit reset a selection from a
-    // previous, cancelled session stays in state - the <select> visually
-    // falls back to its placeholder once the reloaded roster no longer
-    // contains that slot id, but "Verzoek versturen" stayed enabled on
-    // the stale id underneath.
-    setOfferedSlotId('');
-    setRequestedSlotId('');
-    setNotes('');
-    setError(null);
-
     const loadAssignments = async () => {
       setLoading(true);
       setError(null);
@@ -124,13 +122,16 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         if (data?.success) setContacts(data.data);
       })
       .catch(() => {});
-  }, [personId, periodId, isOpen]);
+  }, [personId, periodId]);
 
   // Who could take the offered shift, and how each of them stands towards
   // that day - fetched per offered shift, since that is what it depends on.
   useEffect(() => {
-    if (!isOpen || !offeredSlotId) {
+    if (!offeredSlotId) {
+      // Nothing offered (any more): nothing loads either, so the field asks
+      // for a choice instead of saying "Collega's laden…" (2.6.3).
       setCandidates(null);
+      setCandidatesLoading(false);
       return;
     }
     let current = true;
@@ -152,7 +153,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     return () => {
       current = false;
     };
-  }, [isOpen, offeredSlotId, personId, periodId]);
+  }, [offeredSlotId, personId, periodId]);
 
   const handleSubmit = async () => {
     if (!offeredSlotId || !requestedSlotId) {
@@ -211,11 +212,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     FEESTDAG: 'Feestdag',
   };
 
-  useBodyScrollLock(isOpen);
+  useBodyScrollLock(true);
   // Mirrors the Annuleren button below (disabled={submitting}).
-  const dismissBackdrop = useDialogDismiss(isOpen, onClose, !submitting);
-
-  if (!isOpen) return null;
+  const dismissBackdrop = useDialogDismiss(true, onClose, !submitting);
 
   return (
     <div

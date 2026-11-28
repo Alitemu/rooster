@@ -349,6 +349,21 @@ const MUTATIONS = [
     replace: '',
     tests: ['app/api/planner/period/[id]/import-balances'],
   },
+  // 2.6.3: the swap dialog starts empty at every opening (tests/e2e/ruilvenster-openen.e2e.ts in the browser).
+  {
+    name: 'SwapRequestDialog 2.6.3: the form no longer goes when the dialog closes',
+    file: 'components/SwapRequestDialog.tsx',
+    find: '  if (!props.isOpen) return null;\n  return <SwapRequestForm {...props} />;',
+    replace: '  return <SwapRequestForm {...props} />;',
+    tests: ['components/SwapRequestDialogOpenen'],
+  },
+  {
+    name: "SwapRequestDialog 2.6.3: with nothing offered the colleague's field keeps saying it loads",
+    file: 'components/SwapRequestDialog.tsx',
+    find: '      setCandidates(null);\n      setCandidatesLoading(false);\n      return;',
+    replace: '      setCandidates(null);\n      return;',
+    tests: ['components/SwapRequestDialogOpenen'],
+  },
   // 2.6.1: the audit after 2.5.0.
   {
     name: 'bandShortfall 2.6.1: the suggested weekend band counts the fellows again',
