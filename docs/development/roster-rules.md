@@ -236,6 +236,17 @@ Audit 0.94.0 on top of that:
   add up to every shift and the minimums to no more than there are
   (lib/calendarRules.test.ts, lib/rosterBands.test.ts); over a named
   band that is the planner's, and lib/bandShortfall.ts says so.
+- **What the planner is told, 2.6.1 (the audit after 2.6.0).** The warning
+  before generating (lib/bandShortfall.ts computeBandShortfall) suggests a
+  band worked out over the non-fellows for the weekend
+  (resolvePeriodTargets): over everyone it was the typed band again with a
+  fellow, and the button "Bereik voor de huidige leden" never came. It also
+  reports maximums exactly as many as the shifts: no room, everyone at
+  their maximum, and shifts can stay empty all the same (the 2.5.0
+  scenario). explainGeenRuimte says so, in the dialog and after a
+  generation; generating is not stopped. The table's explanation says
+  "naar rato (71%)" for someone counting below 1 (MemberTarget.factor), and
+  the publication warning names the period's band as "3 of 4".
 - **The app sends each person's band whole.** generate-roster sends
   `band_overrides` for every member and every counter (lib/bandShortfall.ts
   `memberBands`: scaledBandForMember plus the ledger delta, clamped at

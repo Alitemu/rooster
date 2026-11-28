@@ -349,6 +349,56 @@ const MUTATIONS = [
     replace: '',
     tests: ['app/api/planner/period/[id]/import-balances'],
   },
+  // 2.6.1: the audit after 2.5.0.
+  {
+    name: 'bandShortfall 2.6.1: the suggested weekend band counts the fellows again',
+    file: 'lib/bandShortfall.ts',
+    find: '  const suggested = resolvePeriodTargets({}, slotCountByTeller, members, fellowIds, distributionMode).bands;',
+    replace: '  const suggested = resolvePeriodTargets({}, slotCountByTeller, members, new Set(), distributionMode).bands;',
+    tests: ['lib/bandShortfall'],
+  },
+  {
+    name: 'bandShortfall 2.6.1: exactly as many as there are is not reported',
+    file: 'lib/bandShortfall.ts',
+    find: '    if (slotCountByTeller[teller] === 0 || maximaal > slotCountByTeller[teller]) continue;',
+    replace: '    if (slotCountByTeller[teller] === 0 || maximaal >= slotCountByTeller[teller]) continue;',
+    tests: ['lib/bandShortfall', 'app/api/planner/period/[id]/band-check'],
+  },
+  {
+    name: 'unfilledExplanation 2.6.1: no room is not said',
+    file: 'lib/unfilledExplanation.ts',
+    find: '    .filter(([, t]) => t && t.diensten > 0 && t.maximaal === t.diensten)',
+    replace: '    .filter(([, t]) => t && t.diensten > 0 && t.maximaal === t.diensten && false)',
+    tests: ['lib/unfilledExplanation'],
+  },
+  {
+    name: 'unfilledExplanation 2.6.1: the advice says "4 tot 5" again',
+    file: 'lib/unfilledExplanation.ts',
+    find: "  return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;",
+    replace: "  return `${min} tot ${max}`;",
+    tests: ['lib/unfilledExplanation'],
+  },
+  {
+    name: 'publicationCheck 2.6.1: the warning says "3 tot 4" again',
+    file: 'lib/publicationCheck.ts',
+    find: '        `(bereik van de periode: avond ${bereikKort(...bands.AVOND)}, ` +',
+    replace: '        `(bereik van de periode: avond ${bands.AVOND[0]} tot ${bands.AVOND[1]}, ` +',
+    tests: ['lib/publicationCheck'],
+  },
+  {
+    name: 'streefbereikPerPersoon 2.6.1: naar rato is not said',
+    file: 'lib/streefbereikPerPersoon.ts',
+    find: "  return t.factor !== undefined && t.factor < 1 ? ` naar rato (${Math.round(t.factor * 100)}%)` : '';",
+    replace: "  return '';",
+    tests: ['lib/streefbereikPerPersoon'],
+  },
+  {
+    name: 'rosterBands 2.6.1: the factor is given to someone there the whole period too',
+    file: 'lib/rosterBands.ts',
+    find: '    const deel = factor < 1 ? { factor } : {};',
+    replace: '    const deel = { factor };',
+    tests: ['app/api/planner/period/[id]/generate-roster/solverContract', 'lib/streefbereikPerPersoon'],
+  },
   // 2.5.0: each person's band, worked out once in the app and sent to the solver whole.
   // The solver's side of it: band_overrides carries every member's band since 2.5.0 (it was a fellow's weekend only).
   {
@@ -987,8 +1037,8 @@ const MUTATIONS = [
   {
     name: 'band check: a streefbereik too small passes as enough',
     file: 'lib/bandShortfall.ts',
-    find: 'if (maximaal >= slotCountByTeller[teller]) continue;',
-    replace: 'continue;',
+    find: '    if (slotCountByTeller[teller] === 0 || maximaal > slotCountByTeller[teller]) continue;',
+    replace: '    continue;',
     tests: ['app/api/planner/period/[id]/band-check', 'app/api/planner/period/[id]/generate-roster/unfilledReasons'],
   },
   {

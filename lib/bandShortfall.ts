@@ -19,10 +19,8 @@
 import { db } from '@/db/client';
 import {
   TELLERS,
-  effectiveHeadcount,
   fellowWeekendBand,
   loadPeriodMembers,
-  resolveBands,
   resolvePeriodTargets,
   resolveRulesetConfig,
   scaledBandForMember,
@@ -81,25 +79,37 @@ export function memberBands(
 
 /**
  * Per counter where the members' maximums together (memberBands) are fewer
- * than the shifts: how many they allow, how many there are, and - when the
- * typed band is lower than the one the app would choose for these members
- * itself - that band, in the same terms as the "Venster en streefbereik"
- * inputs.
+ * than the shifts, or exactly as many (2.6.1): how many they allow, how many
+ * there are, and - when the typed band is lower than the one the app would
+ * choose for these members itself - that band, in the same terms as the
+ * "Venster en streefbereik" inputs.
+ *
+ * Exactly as many leaves no room: everyone has to do their maximum, and with
+ * the window, blocked days and absences the solver can leave shifts empty
+ * all the same (the 2.5.0 scenario: 14 others with at most 5 for 70 weekend
+ * shifts, two left empty at window 2). That is said, not refused
+ * (lib/unfilledExplanation.ts explainGeenRuimte).
+ *
+ * The band the app would choose leaves the fellows out of the weekend
+ * (resolvePeriodTargets, 2.6.1): over everyone it was the typed one
+ * again, 4 or 5 for 72 weekend shifts among 15 with a fellow, and no
+ * suggestion was offered where 5 or 6 holds them.
  */
 export function computeBandShortfall(args: {
   config: Record<string, unknown>;
   slotCountByTeller: Record<Teller, number>;
   members: PeriodMember[];
+  fellowIds: ReadonlySet<string>;
   bands: MemberBands;
   distributionMode: string;
 }): BereikTekort {
-  const { config, slotCountByTeller, members, bands, distributionMode } = args;
-  const suggested = resolveBands({}, slotCountByTeller, effectiveHeadcount(members, distributionMode));
+  const { config, slotCountByTeller, members, fellowIds, bands, distributionMode } = args;
+  const suggested = resolvePeriodTargets({}, slotCountByTeller, members, fellowIds, distributionMode).bands;
   const tekort: BereikTekort = {};
   for (const teller of TELLERS) {
     let maximaal = 0;
     for (const m of members) maximaal += bands[m.id]?.[teller]?.[1] ?? 0;
-    if (maximaal >= slotCountByTeller[teller]) continue;
+    if (slotCountByTeller[teller] === 0 || maximaal > slotCountByTeller[teller]) continue;
     const configured = config[BAND_CONFIG_KEY[teller]];
     const voorgesteld = suggested[teller];
     tekort[teller] = {
@@ -155,6 +165,7 @@ export function bandCheckForPeriod(periodId: string, typed: BandOverridesInput =
       config,
       slotCountByTeller,
       members,
+      fellowIds,
       bands: memberBands(periodId, targets, members, fellowIds, distributionMode, balances),
       distributionMode,
     }),

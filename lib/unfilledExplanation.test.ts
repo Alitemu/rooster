@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dateRanges, explainUnfilled } from './unfilledExplanation';
+import { dateRanges, explainGeenRuimte, explainUnfilled } from './unfilledExplanation';
 
 /**
  * The rule: after generating, the planner is told why shifts stayed empty,
@@ -42,8 +42,8 @@ describe('explainUnfilled', () => {
     );
     expect(lines).toEqual([
       '8 mensen doen volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Hun streefbereik is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Personeel beheren.',
-      'Het streefbereik laat samen hoogstens 55 avonddiensten toe, terwijl er 175 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 19 tot 20 avonddiensten per persoon.',
-      'Het streefbereik laat samen hoogstens 30 weekenddiensten toe, terwijl er 70 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 7 tot 8 weekenddiensten per persoon.',
+      'Het streefbereik laat samen hoogstens 55 avonddiensten toe, terwijl er 175 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 19 of 20 avonddiensten per persoon.',
+      'Het streefbereik laat samen hoogstens 30 weekenddiensten toe, terwijl er 70 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 7 of 8 weekenddiensten per persoon.',
     ]);
     for (const l of lines) expect(l).not.toMatch(/ - |, en |, of /);
   });
@@ -78,5 +78,28 @@ describe('explainUnfilled', () => {
 describe('dateRanges', () => {
   it('joins consecutive days, also over a month and a year end', () => {
     expect(dateRanges(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-05'])).toEqual(['30 december 2026 t/m 1 januari 2027', '5 januari 2027']);
+  });
+});
+
+describe('explainGeenRuimte (2.6.1)', () => {
+  it('says so when the band holds the shifts exactly, with the band that leaves room', () => {
+    expect(explainGeenRuimte({ WEEKEND: { maximaal: 70, diensten: 70, voorgesteld: [5, 6] } })).toEqual([
+      'Het streefbereik laat precies ruimte voor alle 70 weekenddiensten: iedereen moet het maximum doen. ' +
+        'Door het venster, geblokkeerde dagen en afwezigheid kunnen er dan toch weekenddiensten leeg blijven. ' +
+        'Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 5 of 6 weekenddiensten per persoon.',
+    ]);
+  });
+
+  it('says nothing of it for a shortfall, which has its own sentence, or for a counter without shifts', () => {
+    expect(explainGeenRuimte({ AVOND: { maximaal: 55, diensten: 175 } })).toEqual([]);
+    expect(explainGeenRuimte({ FEESTDAG: { maximaal: 0, diensten: 0 } })).toEqual([]);
+  });
+
+  it('is said after a generation that left shifts empty too', () => {
+    const lines = explainUnfilled(
+      [{ datum: '2027-05-15', teller: 'WEEKEND', reden: null }],
+      { WEEKEND: { maximaal: 70, diensten: 70 } }
+    );
+    expect(lines.some((l) => l.startsWith('Het streefbereik laat precies ruimte voor alle 70 weekenddiensten'))).toBe(true);
   });
 });

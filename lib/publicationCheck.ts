@@ -48,6 +48,7 @@
  *     go back and reassign shifts by hand until the numbers lined up.
  */
 
+import { bereikKort } from '@/lib/streefbereikPerPersoon';
 import { db } from '@/db/client';
 import {
   TELLERS,
@@ -253,10 +254,12 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // decided that's not worth it (nobody else available, made up next
     // period, etc.).
     warnings.push(
+      // "2 of 3" as everywhere else, not "2 tot 3" (2.6.1), and named as the period's: someone there part of it, a
+      // part-timer under naar rato or a saldo has a band of their own (the notes below, the tab Dienstdoende).
       `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
-        `(avond ${bands.AVOND[0]} tot ${bands.AVOND[1]}, ` +
-        `weekend ${bands.WEEKEND[0]} tot ${bands.WEEKEND[1]}, ` +
-        `feestdag ${bands.FEESTDAG[0]} tot ${bands.FEESTDAG[1]}).` +
+        `(bereik van de periode: avond ${bereikKort(...bands.AVOND)}, ` +
+        `weekend ${bereikKort(...bands.WEEKEND)}, ` +
+        `feestdag ${bereikKort(...bands.FEESTDAG)}; ieders eigen bereik staat bij Dienstdoende).` +
         (scalingNotes.length > 0 ? ` ${scalingNotes.join(' ')}` : '') +
         ` Controleer of dit bewust is. Is het dat niet, pas dan het streefbereik aan bij de instellingen ` +
         `van deze periode of wissel handmatig wie welke dienst draait.`

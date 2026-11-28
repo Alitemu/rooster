@@ -25,13 +25,23 @@ export function bereikKort(min: number, max: number): string {
   return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;
 }
 
+/**
+ * 2.6.1: someone there part of the period, or part-time under naar rato, has a basis of their own ("1 of 2" next to
+ * the others' "2 of 3"), and the table says why: "naar rato (71%)". Without it the planner saw a smaller range and
+ * no reason.
+ */
+function naarRato(t: MemberTarget): string {
+  return t.factor !== undefined && t.factor < 1 ? ` naar rato (${Math.round(t.factor * 100)}%)` : '';
+}
+
 export function bereikCel(t: MemberTarget): BereikCel {
   const tekst = bereikKort(t.min, t.max);
   if (t.fellow) return { tekst, toelichting: 'fellow: geen weekenddienst verwacht' };
   const saldo = t.saldo ?? 0;
-  if (saldo === 0) return { tekst, toelichting: null };
+  const rato = naarRato(t);
+  if (saldo === 0) return { tekst, toelichting: rato ? rato.trim() : null };
   const n = Math.abs(saldo);
-  const basis = t.basis ? `basis ${bereikKort(t.basis[0], t.basis[1])}, ` : '';
+  const basis = t.basis ? `basis ${bereikKort(t.basis[0], t.basis[1])}${rato}, ` : '';
   return { tekst, toelichting: `${basis}${n} ${n === 1 ? 'dienst' : 'diensten'} ${saldo > 0 ? 'extra' : 'minder'} uit het saldo` };
 }
 

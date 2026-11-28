@@ -476,6 +476,7 @@ async function runGeneration(args: {
       config,
       slotCountByTeller,
       members: poolMembers,
+      fellowIds,
       bands: bandOverrides,
       distributionMode,
     });

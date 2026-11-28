@@ -13,7 +13,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
 import { withBasePath } from '@/lib/basePath';
-import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
+import { explainBereikTekort, explainGeenRuimte, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import {
@@ -817,6 +817,24 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           </p>
                         ))}
                         <p className="text-xs text-amber-900">Zo blijven er diensten leeg, bij elke methode en elk venster.</p>
+                        {Object.values(bandTekort).some((t) => t?.voorgesteld) && (
+                          <button
+                            type="button"
+                            onClick={applySuggestedBands}
+                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
+                          >
+                            Bereik voor de huidige leden
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {!bandInvalid && explainBereikTekort(bandTekort).length === 0 && explainGeenRuimte(bandTekort).length > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-2" data-testid="bereik-geen-ruimte">
+                        {explainGeenRuimte(bandTekort).map((line) => (
+                          <p key={line} className="text-xs text-amber-900">
+                            {line}
+                          </p>
+                        ))}
                         {Object.values(bandTekort).some((t) => t?.voorgesteld) && (
                           <button
                             type="button"

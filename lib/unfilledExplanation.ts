@@ -60,10 +60,36 @@ export function explainBereikTekort(bereikTekort: BereikTekort): string[] {
     .map(([teller, tekort]) => {
       const soort = MEERVOUD[teller] ?? 'diensten';
       const voorstel = tekort!.voorgesteld;
-      const advies = voorstel
-        ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${voorstel[0] === voorstel[1] ? voorstel[0] : `${voorstel[0]} tot ${voorstel[1]}`} ${soort} per persoon.`
-        : 'Verhoog het bereik onder Venster en streefbereik.';
-      return `Het streefbereik laat samen hoogstens ${tekort!.maximaal} ${soort} toe, terwijl er ${tekort!.diensten} zijn. ${advies}`;
+      return `Het streefbereik laat samen hoogstens ${tekort!.maximaal} ${soort} toe, terwijl er ${tekort!.diensten} zijn. ${advies(voorstel, soort)}`;
+    });
+}
+
+/** "4 of 5", "4", "4 tot en met 6": as everywhere else (lib/streefbereikPerPersoon.ts bereikKort), not "4 tot 5" (2.6.1). */
+function bereikWoorden([min, max]: [number, number]): string {
+  if (min === max) return String(max);
+  return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;
+}
+
+function advies(voorstel: [number, number] | undefined, soort: string): string {
+  return voorstel
+    ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${bereikWoorden(voorstel)} ${soort} per persoon.`
+    : 'Verhoog het bereik onder Venster en streefbereik.';
+}
+
+/**
+ * One sentence per counter whose streefbereik holds its shifts exactly (2.6.1): no room left, everyone has to do
+ * their maximum, and the solver can leave shifts empty all the same (the 2.5.0 scenario, a fellow among 15). A
+ * hint only: generating goes on as before (the planner's choice to keep the configured band as it is).
+ */
+export function explainGeenRuimte(bereikTekort: BereikTekort): string[] {
+  return Object.entries(bereikTekort)
+    .filter(([, t]) => t && t.diensten > 0 && t.maximaal === t.diensten)
+    .map(([teller, t]) => {
+      const soort = MEERVOUD[teller] ?? 'diensten';
+      return (
+        `Het streefbereik laat precies ruimte voor alle ${t!.diensten} ${soort}: iedereen moet het maximum doen. ` +
+        `Door het venster, geblokkeerde dagen en afwezigheid kunnen er dan toch ${soort} leeg blijven. ${advies(t!.voorgesteld, soort)}`
+      );
     });
 }
 
@@ -100,6 +126,8 @@ export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: Bere
   }
 
   lines.push(...explainBereikTekort(bereikTekort));
+  // No room at all (2.6.1): the band held the shifts on paper, and what stayed empty is why.
+  lines.push(...explainGeenRuimte(bereikTekort));
   const doorBereik = tekorten.reduce((sum, [, t]) => sum + t!.diensten - t!.maximaal, 0);
 
   // What the causes above leave unexplained: the streefbereik's shortfall

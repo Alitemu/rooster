@@ -272,6 +272,9 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
         const t = targets.get(personId)![teller];
         expect({ personId, teller, band: input.band_overrides[personId][teller] }).toEqual({ personId, teller, band: [t.min, t.max] });
         if (!t.fellow && t.basis && personId === ids.halfway) expect(t.basis[1] - t.basis[0], teller).toBeLessThanOrEqual(1);
+        // 2.6.1: the part someone counts for, for the planner's table ("naar rato"), only below 1.
+        if (personId === ids.halfway) expect(t.factor, teller).toBeLessThan(1);
+        if (personId === ids.split) expect(t.factor, teller).toBeUndefined();
       }
     }
   });

@@ -374,6 +374,11 @@ export interface MemberTarget {
   basis?: Band;
   /** The saldo folded in: beginsaldo, carry-over and correcties of this period together (2.2.0). */
   saldo?: number;
+  /**
+   * The part this person counts for, below 1 only: dekking times, under NAAR_RATO, the deelnamefactor (2.6.1). Their
+   * basis is then their own share in proportion (scaledBandForMember), which the planner's table says.
+   */
+  factor?: number;
 }
 
 /**
@@ -421,11 +426,13 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
 
   for (const member of members) {
     const byTeller = {} as Record<Teller, MemberTarget>;
+    const factor = member.dekking * (distributionMode === 'NAAR_RATO' ? member.deelnamefactor : 1);
+    const deel = factor < 1 ? { factor } : {};
     for (const teller of TELLERS) {
       const scaled = scaledBandForMember(bands, teller, member, distributionMode);
       if (teller === 'WEEKEND' && fellows.has(member.id)) {
         const [min, max] = fellowWeekendBand(scaled, released.get(member.id) ?? 0);
-        byTeller[teller] = { min, max, fellow: true, basis: scaled, saldo: 0 };
+        byTeller[teller] = { min, max, fellow: true, basis: scaled, saldo: 0, ...deel };
         continue;
       }
       const delta = deltas.get(`${member.id}|${teller}`) || 0;
@@ -438,6 +445,7 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
         fellow: false,
         basis: scaled,
         saldo: delta,
+        ...deel,
       };
     }
     result.set(member.id, byTeller);

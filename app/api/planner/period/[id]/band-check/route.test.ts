@@ -95,7 +95,9 @@ describe('GET /api/planner/period/[id]/band-check', () => {
   });
 
   it('checks the band as typed in the dialog instead of the frozen one', async () => {
-    expect((await check('?bandAvond=5,5')).json.data!.bereik_tekort).toEqual({});
+    expect((await check('?bandAvond=5,6')).json.data!.bereik_tekort).toEqual({});
+    // Exactly as many as there are (2 x 5 for 10): no room, said since 2.6.1 (lib/unfilledExplanation.ts explainGeenRuimte).
+    expect((await check('?bandAvond=5,5')).json.data!.bereik_tekort).toEqual({ AVOND: { maximaal: 10, diensten: 10, voorgesteld: [5, 6] } });
     expect((await check('?bandAvond=2,4')).json.data!.bereik_tekort).toEqual({ AVOND: { maximaal: 8, diensten: 10, voorgesteld: [5, 6] } });
   });
 

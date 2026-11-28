@@ -54,3 +54,24 @@ describe('the streefbereik per person (2.2.0)', () => {
     }
   });
 });
+
+describe('naar rato in the table (2.6.1)', () => {
+  const deel = (min: number, max: number, factor: number | undefined, saldo = 0, basis: [number, number] = [min, max]) => ({
+    min,
+    max,
+    fellow: false,
+    basis,
+    saldo,
+    factor,
+  });
+
+  it('says why someone there part of the period has a smaller range', () => {
+    expect(bereikCel(deel(1, 2, 0.714)).toelichting).toBe('naar rato (71%)');
+    expect(bereikCel(deel(3, 4, 0.5, 2, [1, 2])).toelichting).toBe('basis 1 of 2 naar rato (50%), 2 diensten extra uit het saldo');
+  });
+
+  it('says nothing of it for someone there the whole period', () => {
+    expect(bereikCel(deel(2, 3, undefined)).toelichting).toBeNull();
+    expect(bereikCel(deel(3, 4, undefined, 1, [2, 3])).toelichting).toBe('basis 2 of 3, 1 dienst extra uit het saldo');
+  });
+});

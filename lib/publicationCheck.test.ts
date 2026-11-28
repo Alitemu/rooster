@@ -355,6 +355,10 @@ describe('runPublicationCheck', () => {
       const tekst = runPublicationCheck(period).warnings.join(' ');
       expect(tekst).toContain('Fellows tellen niet mee voor de weekenden.');
       expect(tekst).not.toContain('verhoogd');
+      // 2.6.1: the period's band as everywhere else, "3 of 4", named as the period's; never "3 tot 4".
+      expect(tekst).toContain('(bereik van de periode: avond 3 of 4, weekend 1 of 2,');
+      expect(tekst).toContain('ieders eigen bereik staat bij Dienstdoende');
+      expect(tekst).not.toMatch(/\d tot \d/);
     });
 
     it('is not there for a fellow who no longer takes part in the period', () => {
