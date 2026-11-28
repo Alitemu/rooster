@@ -190,7 +190,9 @@ export function StaffingOverview({ periodId }: Props) {
       <p className="text-sm text-neutral-600" data-testid="dienstdoende-uitleg">
         De breedte van de balk wordt bepaald door de hoogste waarde in die kolom. Onder elke balk staat het
         [streefbereik] van die persoon, inclusief de correctie uit het saldo. Bij avond- en weekenddiensten is dit
-        streefbereik grafisch weergegeven door het gestippelde vak.
+        streefbereik grafisch weergegeven door het gestippelde vak. Draait iemand een deel van de periode mee of
+        werkt iemand in deeltijd bij een verdeling naar rato, dan staat onder de codenaam voor welk deel die
+        meetelt. Het streefbereik is dan al naar rato.
         <br />
         <span className="text-red-600">▲</span> is meer dan het bereik en <span className="text-red-600">▼</span> is
         minder.
@@ -204,7 +206,8 @@ export function StaffingOverview({ periodId }: Props) {
             {header('WEEKEND', 'Weekenddiensten')}
             {header('FEESTDAG', 'Feestdagdiensten')}
             <th className="px-4 py-2 font-medium text-right">Totaal</th>
-            <th className="px-4 py-2 font-medium">Streefbereik</th>
+            {/* 2.6.4: the range itself stands under each bar, this column says how the count fits it. */}
+            <th className="px-4 py-2 font-medium">Uitkomst</th>
           </tr>
         </thead>
         <tbody>
@@ -213,6 +216,12 @@ export function StaffingOverview({ periodId }: Props) {
               <td className="px-4 py-2 whitespace-nowrap">
                 {s.codenaam}
                 {s.fellow && <FellowBadge />}
+                {/* Once per person (2.6.4), not under every kind of dienst. */}
+                {s.streefbereik?.naarRato && (
+                  <span className="block text-xs text-neutral-500" data-testid="naar-rato">
+                    {s.streefbereik.naarRato}
+                  </span>
+                )}
               </td>
               <td className="px-4 py-2"><CountBar value={s.AVOND} max={max.AVOND} counter="AVOND" bereik={s.bereik?.AVOND ?? null} onder={s.streefbereik?.AVOND.tekst} /></td>
               <td className="px-4 py-2">

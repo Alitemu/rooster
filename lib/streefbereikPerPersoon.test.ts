@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bereikCel, bereikKort, uitkomstPerSoort } from './streefbereikPerPersoon';
+import { bereikCel, bereikKort, naarRatoTekst, streefbereikRij, uitkomstPerSoort } from './streefbereikPerPersoon';
 import { bereikVak } from './bereikVak';
 
 const t = (min: number, max: number, extra: { saldo?: number; basis?: [number, number]; fellow?: boolean } = {}) => ({
@@ -55,7 +55,7 @@ describe('the streefbereik per person (2.2.0)', () => {
   });
 });
 
-describe('naar rato in the table (2.6.1, 2.6.2)', () => {
+describe('naar rato in the table (2.6.1, 2.6.4)', () => {
   const deel = (min: number, max: number, factor: number | undefined, saldo = 0, basis: [number, number] = [min, max]) => ({
     min,
     max,
@@ -65,11 +65,27 @@ describe('naar rato in the table (2.6.1, 2.6.2)', () => {
     factor,
   });
 
-  it('says why someone there part of the period has a smaller range', () => {
-    expect(bereikCel(deel(1, 2, 0.714)).toelichting).toBe('naar rato 71%');
-    expect(bereikCel(deel(3, 4, 0.5, 2, [1, 2])).toelichting).toBe('basis 1 of 2, naar rato 50%, 2 diensten extra uit het saldo');
+  it('says naar rato once per person, not in every kind of dienst', () => {
+    const per = (factor: number | undefined, saldo = 0) => ({
+      AVOND: deel(1, 2, factor, saldo, [1, 2]),
+      WEEKEND: deel(0, 1, factor),
+      FEESTDAG: deel(0, 1, factor),
+    });
+    expect(naarRatoTekst(per(0.714))).toBe('naar rato 71%');
+    expect(naarRatoTekst(per(undefined))).toBeNull();
+    const rij = streefbereikRij(per(0.7));
+    expect(rij.naarRato).toBe('naar rato 70%');
+    for (const soort of ['AVOND', 'WEEKEND', 'FEESTDAG'] as const) {
+      expect(rij[soort].toelichting ?? '').not.toContain('70%');
+    }
+    expect(streefbereikRij(per(undefined)).naarRato).toBeNull();
+  });
+
+  it('says a basis that is already their share is naar rato, before the saldo', () => {
+    expect(bereikCel(deel(1, 2, 0.714)).toelichting).toBeNull();
+    expect(bereikCel(deel(3, 4, 0.5, 2, [1, 2])).toelichting).toBe('basis naar rato 1 of 2, 2 diensten extra uit het saldo');
     // The table puts the explanation in brackets: no brackets of its own inside (2.6.2).
-    for (const t of [deel(1, 2, 0.714), deel(3, 4, 0.5, 2, [1, 2]), deel(2, 3, undefined, -1, [3, 4])]) {
+    for (const t of [deel(3, 4, 0.5, 2, [1, 2]), deel(2, 3, undefined, -1, [3, 4])]) {
       expect(bereikCel(t).toelichting ?? '').not.toMatch(/[()]/);
     }
   });

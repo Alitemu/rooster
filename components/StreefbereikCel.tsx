@@ -18,6 +18,12 @@ export function StreefbereikCel({ rij }: { rij: StreefbereikRij | null | undefin
   if (!rij) return <span className="text-neutral-400">−</span>;
   return (
     <div className="text-xs leading-5 min-w-[10rem]" data-testid="streefbereik-cel">
+      {/* Once per person (2.6.4), not under every kind of dienst. */}
+      {rij.naarRato && (
+        <div className="text-neutral-500" data-testid="naar-rato">
+          {rij.naarRato}
+        </div>
+      )}
       {SOORTEN.map(([sleutel, label]) => (
         <div key={sleutel}>
           {label}: <span className="font-medium text-neutral-900">{rij[sleutel].tekst}</span>

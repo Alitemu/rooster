@@ -655,6 +655,8 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet. (Vanaf 2.0.0 is dit vervangen door de lijst met
 onderdelen links, zie hieronder bij 2.0.0.)
 
+**Vanaf versie 2.6.4** heet de laatste kolom van *Dienstdoende* *Uitkomst*: het streefbereik zelf staat onder de balken. Bij wie een deel van de periode meedraait of naar rato in deeltijd werkt, staat *naar rato 70%* nu één keer onder de codenaam, in plaats van bij elke soort dienst. In *Status voorkeuren* staat het bovenaan de cel. Met een saldo staat er bijvoorbeeld *basis naar rato 1 of 2, 2 diensten minder uit het saldo*. Zo is duidelijk dat de basis al naar rato is.
+
 **Vanaf versie 2.6.3** begint het venster *Ruilverzoek indienen* elke keer leeg. Wie het opnieuw opende, zag heel even de vorige keuze terug. Daarna stond bij *Dienst die je wilt* de tekst *Collega's laden…* tot je opnieuw een dienst koos, terwijl er niets laadde.
 
 **Vanaf versie 2.6.2** staat bij *Dienstdoende* geen dubbel paar haakjes meer bij wie naar rato meedraait. De melding over fellows in *Rooster genereren* schrijft het weekendbereik als *4 of 5*, zoals overal. Terwijl de Herhaalplanner of de Gerandomiseerde planner rekent, noemt het scherm geen zoektijd meer. Die bepalen ze zelf en het kan veel langer duren dan 10 minuten.

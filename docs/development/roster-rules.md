@@ -247,10 +247,16 @@ Audit 0.94.0 on top of that:
   reports maximums exactly as many as the shifts: no room, everyone at
   their maximum, and shifts can stay empty all the same (the 2.5.0
   scenario). explainGeenRuimte says so, in the dialog and after a
-  generation; generating is not stopped. The table's explanation says
-  "naar rato 71%" for someone counting below 1 (MemberTarget.factor; 2.6.1
-  wrote "(71%)", which the table's own brackets made "(naar rato (71%))"),
-  and the publication warning names the period's band as "3 of 4". One
+  generation; generating is not stopped. For someone counting below 1
+  (MemberTarget.factor) the tables say "naar rato 71%" once, under the
+  codenaam in Dienstdoende and at the top of the cell in Status voorkeuren
+  (StreefbereikRij.naarRato, 2.6.4; before, it stood in the explanation of
+  every kind of dienst). With a saldo the explanation reads "basis naar
+  rato 1 of 2, 2 diensten minder uit het saldo": "basis 1 of 2, naar rato
+  70%, ..." read as if the 70% still came on top of the basis. Dienstdoende's
+  last column is "Uitkomst" since 2.6.4 (it said "Streefbereik", while the
+  range stands under each bar). The publication warning names the
+  period's band as "3 of 4". One
   wording for a range on the planner's screens since 2.6.2: lib/bereikKort.ts.
 - **The app sends each person's band whole.** generate-roster sends
   `band_overrides` for every member and every counter (lib/bandShortfall.ts

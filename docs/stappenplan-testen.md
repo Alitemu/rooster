@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.6.3. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.6.4. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -173,9 +173,12 @@ dus er gaat niets echt weg.
   elke balk het streefbereik tussen blokhaken, ook bij wie geen dienst heeft. Bij
   avond- en weekenddiensten een gestippeld vak over de balk, bij feestdagen niet.
   Wie op de onder- of bovengrens zit, eindigt in het vak. Na het genereren staat in
-  de kolom *Streefbereik* per soort "goed", of in rood "1 te veel" of "2 tekort",
+  de kolom *Uitkomst* per soort "goed" of in rood "1 te veel" of "2 tekort",
   met een rood ▲ of ▼ bij de balk. Wijzig met de hand een dienst zodat iemand er
-  één te veel heeft: de balk loopt dan een halve dienst voorbij het vak.
+  één te veel heeft: de balk loopt dan een halve dienst voorbij het vak. Bij wie
+  een deel van de periode meedraait, staat één keer onder de codenaam *naar rato*
+  met een percentage. Met een saldo staat er bijvoorbeeld *basis naar rato 1 of 2,
+  2 diensten minder uit het saldo*.
 - [ ] **C10.** Saldo's: kloppen de aantallen diensten meer en minder met wat je
   verwacht, en staan ze in woorden ("1 avonddienst minder")?
 - [ ] **C11.** *Rooster verwijderen* en de periode naar de *Prullenbak*. Je ziet:
